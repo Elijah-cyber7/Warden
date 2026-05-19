@@ -3,21 +3,25 @@ import queue
 import numpy as np
 import sounddevice as sd
 import SoapySDR
+import vosk
 from scipy.signal import firwin, lfilter, resample_poly, butter, sosfilt
+
 
 # config
 SAMPLE_RATE = 2.4e6
-CENTER_FREQ = 462.550e6
+CENTER_FREQ = 89.300e6   #462.550e6
 AUDIO_RATE = 48000
-GAIN = 60
+GAIN = 78
 BUFF_SIZE = 1024 * 256
-CHANNEL_BW = 12500
+CHANNEL_BW = 200000 #12500
 
 # filters built once at startup
 channel_filter = firwin(128, cutoff=CHANNEL_BW / SAMPLE_RATE)
 audio_filter = firwin(64, cutoff=0.02)
 
-highpass = butter(5, 300 / (AUDIO_RATE / 2), btype='high', output='sos')
+#highpass = butter(5, 300 / (AUDIO_RATE / 2), btype='high', output='sos')
+
+bandpass = butter(1, [300 / (AUDIO_RATE / 2), 3400 / (AUDIO_RATE / 2)], btype='band', output='sos')
 
 # squelch threshold — adjust this value based on your noise floor
 SQUELCH = 0.01
@@ -55,7 +59,8 @@ def process_iq(iq):
         return  # silence, don't play
 
     # strip CTCSS tone with highpass filter
-    audio = sosfilt(highpass, audio)
+    #audio = sosfilt(highpass, audio)
+    audio = sosfilt(bandpass, audio)
 
     # normalize
     audio = audio / (np.max(np.abs(audio)) + 1e-9)
