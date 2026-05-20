@@ -18,6 +18,7 @@ def transcribe_audio(audio_48k: np.ndarray):
 
     # convert to 16-bit PCM
     pcm = (audio_16k * 32767).astype(np.int16).tobytes()
+    print(f"Accepted: {recognizer.AcceptWaveform(pcm)}")
 
     if recognizer.AcceptWaveform(pcm):
         # full utterance complete

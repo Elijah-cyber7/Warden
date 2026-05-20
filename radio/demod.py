@@ -25,7 +25,7 @@ _de_a = np.array([1.0, -_alpha])
 _de_zi = lfilter_zi(_de_b, _de_a)
 
 # --- Voice bandpass 300 Hz–3400 Hz with state ---
-_bp_sos = butter(2, [300 / (AUDIO_RATE / 2), 3400 / (AUDIO_RATE / 2)], btype='band', output='sos')
+_bp_sos = butter(1, [300 / (AUDIO_RATE / 2), 3400 / (AUDIO_RATE / 2)], btype='band', output='sos')
 _bp_zi = sosfilt_zi(_bp_sos)
 
 # --- CTCSS notch 123 Hz with state ---
@@ -75,7 +75,7 @@ def process_iq(iq: np.ndarray):
 
     # squelch
     power = np.sqrt(np.mean(audio ** 2))
-    print(f"[SQUELCH] power: {power:.8f}")
+
     if power < SQUELCH:
         if _audio_buffer:
             full_audio = np.concatenate(_audio_buffer)
@@ -97,6 +97,4 @@ def process_iq(iq: np.ndarray):
 
     # keep float for transcription — vosk_engine expects float
     _audio_buffer.append(audio)
-
     audio_queue.put(audio_int16)
-    _audio_buffer.append(audio_int16)

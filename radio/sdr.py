@@ -21,6 +21,6 @@ def rx_loop(sdr):
 
     print(f"Listening on {CENTER_FREQ / 1e6:.3f} MHz...")
     while True:
-        sr = sdr.readStream(rx_stream, [buf], len(buf))
+        sr = sdr.readStream(rx_stream, [buf], len(buf), timeoutUs=250000)
         if sr.ret > 0:
             process_iq(buf[:sr.ret].copy())
