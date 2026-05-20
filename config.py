@@ -1,17 +1,17 @@
 # radio
-SAMPLE_RATE = 2.4e6
-CENTER_FREQ = 462.550e6  # swap to 462.550e6 for PTT
+SAMPLE_RATE = 2e6
+CENTER_FREQ = 462.550e6
 GAIN = 60
 BUFF_SIZE = 1024 * 256
-CHANNEL_BW = 12500  # swap to 12500 for NBFM PTT
+CHANNEL_BW = 12500
 
 # audio
 AUDIO_RATE = 48000
-SQUELCH = 0.01
+SQUELCH = 0.01  # calibrate after confirming clean audio
 
-#CTCSS
+# CTCSS
 CTCSS_FREQ = 123.0
-CTCSS_THRESHOLD = 0.0001
+CTCSS_THRESHOLD = 0.00000001  # calibrate from [CTCSS] terminal output
 
-# preamble — callsigns that authorize dispatch
-CALLSIGNS = ["warden", "dispatch"]  # replace with your actual callsigns
+# preamble
+CALLSIGNS = ["warden", "dispatch"]
