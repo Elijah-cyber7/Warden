@@ -3,15 +3,26 @@ from scipy.signal import firwin, lfilter, resample_poly, butter, sosfilt
 from config import SAMPLE_RATE, AUDIO_RATE, CHANNEL_BW, SQUELCH
 from audio.player import audio_queue
 from transcription.vosk_engine import transcribe_audio
-
+from config import CTCSS_THRESHOLD, CTCSS_FREQ
 # filters built once at startup
 channel_filter = firwin(128, cutoff=CHANNEL_BW / SAMPLE_RATE)
-bandpass = butter(1, [300 / (AUDIO_RATE / 2), 3400 / (AUDIO_RATE / 2)], btype='band', output='sos')
+bandpass = butter(2, [400 / (AUDIO_RATE / 2), 3400 / (AUDIO_RATE / 2)], btype='band', output='sos')
 
 # accumulation buffer for transcription
 _audio_buffer = []
 _BUFFER_FLUSH_SIZE = 10  # flush to transcription every N chunks
 
+
+ctcss_detector = butter(2,
+    [(CTCSS_FREQ - 5) / (AUDIO_RATE / 2),
+     (CTCSS_FREQ + 5) / (AUDIO_RATE / 2)],
+    btype='band', output='sos')
+
+def detect_ctcss(audio):
+    filtered = sosfilt(ctcss_detector, audio)
+    power = np.sqrt(np.mean(filtered ** 2))
+    print(f"[CTCSS] power: {power:.6f}")
+    return power > CTCSS_THRESHOLD
 
 def process_iq(iq):
     global _audio_buffer
@@ -37,7 +48,9 @@ def process_iq(iq):
             transcribe_audio(full_audio)
             _audio_buffer = []
         return
-
+    # CTCSS gate — only process transmissions from H777 on channel 10
+    if not detect_ctcss(audio):
+        return
     # bandpass filter
     audio = sosfilt(bandpass, audio)
 
