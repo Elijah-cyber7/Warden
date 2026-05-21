@@ -6,9 +6,13 @@ audio_queue = queue.Queue()
 
 
 def audio_worker():
-    with sd.OutputStream(samplerate=AUDIO_RATE, channels=1, dtype='float32', blocksize=0) as stream:
-        while True:
-            audio = audio_queue.get()
-            if audio is None:
-                break
-            stream.write(audio.reshape(-1, 1))
+    while True:
+        try:
+            with sd.OutputStream(samplerate=AUDIO_RATE, channels=1, dtype='float32') as stream:
+                while True:
+                    audio = audio_queue.get()
+                    if audio is None:
+                        return
+                    stream.write(audio.reshape(-1, 1))
+        except sd.PortAudioError as e:
+            print(f"[AUDIO] stream error: {e} — restarting")
