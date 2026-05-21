@@ -19,7 +19,7 @@ def rx_loop(sdr):
     sdr.activateStream(rx_stream)
     buf = np.zeros(BUFF_SIZE, dtype=np.complex64)
 
-    print(f"Listening on {CENTER_FREQ / 1e6:.3f} MHz...")
+    print(f"Listening on {CENTER_FREQ / 1e6:.4f} MHz...")
     while True:
         sr = sdr.readStream(rx_stream, [buf], len(buf))
         if sr.ret > 0:

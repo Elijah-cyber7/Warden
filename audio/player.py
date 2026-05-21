@@ -6,7 +6,7 @@ audio_queue = queue.Queue()
 
 
 def audio_worker():
-    with sd.OutputStream(samplerate=AUDIO_RATE, channels=1, dtype='float32',blocksize=2500) as stream:
+    with sd.OutputStream(samplerate=AUDIO_RATE, channels=1, dtype='float32', blocksize=0) as stream:
         while True:
             audio = audio_queue.get()
             if audio is None:
