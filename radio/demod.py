@@ -20,7 +20,7 @@ _ch_zi_Q = lfilter_zi(_ch_taps, 1.0)
 
 # voice bandpass: FIR highpass (400 Hz) + FIR lowpass (3400 Hz) cascade
 _hp_taps = firwin(801, 400, fs=AUDIO_RATE, pass_zero=False)
-_lp_taps = firwin(401, 3400, fs=AUDIO_RATE, pass_zero=True)
+_lp_taps = firwin(801, 3400, fs=AUDIO_RATE, pass_zero=True)
 _hp_zi = lfilter_zi(_hp_taps, 1.0)
 _lp_zi = lfilter_zi(_lp_taps, 1.0)
 
