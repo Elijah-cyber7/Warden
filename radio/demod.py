@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.signal import lfilter, lfilter_zi, resample_poly, butter, sosfilt, sosfilt_zi, firwin, iirnotch
+from scipy.signal import lfilter, lfilter_zi, resample_poly, sosfilt, sosfilt_zi, firwin, iirnotch
 from config import SAMPLE_RATE, AUDIO_RATE, CHANNEL_BW, SQUELCH
 from audio.player import audio_queue
 from transcription.vosk_engine import transcribe_audio
@@ -13,23 +13,20 @@ _ch_taps = firwin(128, CHANNEL_BW / 2 / (INTERMEDIATE_RATE / 2))
 _ch_zi_I = lfilter_zi(_ch_taps, 1.0)
 _ch_zi_Q = lfilter_zi(_ch_taps, 1.0)
 
-# CTCSS notch with state
-_notch_b, _notch_a = iirnotch(123.7 / (AUDIO_RATE / 2), Q=5)
-_notch_zi = lfilter_zi(_notch_b, _notch_a)
-
-# voice bandpass with state
-_vp_sos = butter(6, [300 / (AUDIO_RATE / 2), 4000 / (AUDIO_RATE / 2)], btype='band', output='sos')
-_vp_zi = sosfilt_zi(_vp_sos)
+# voice bandpass: FIR highpass (300 Hz) + FIR lowpass (4000 Hz) cascade
+_hp_taps = firwin(801, 400, fs=AUDIO_RATE, pass_zero=False)
+_lp_taps = firwin(401, 3400, fs=AUDIO_RATE, pass_zero=True)
+_hp_zi = lfilter_zi(_hp_taps, 1.0)
+_lp_zi = lfilter_zi(_lp_taps, 1.0)
 
 _audio_buffer = []
 _last_sample = np.complex64(1 + 0j)
 
 
 def process_iq(iq):
-    global _audio_buffer, _vp_zi, _notch_zi, _ch_zi_I, _ch_zi_Q, _last_sample
+    global _audio_buffer, _hp_zi, _lp_zi, _ch_zi_I, _ch_zi_Q, _last_sample
 
     iq_power = np.mean(np.abs(iq) ** 2)
-    #print(f"iq_power: {iq_power:.6f}")
     if iq_power < SQUELCH:
         if _audio_buffer:
             full_audio = np.concatenate(_audio_buffer)
@@ -55,11 +52,9 @@ def process_iq(iq):
     # resample
     audio = resample_poly(demodulated, int(AUDIO_RATE), INTERMEDIATE_RATE)
 
-    # CTCSS notch with state
-    audio, _notch_zi = lfilter(_notch_b, _notch_a, audio, zi=_notch_zi)
-
-    # voice bandpass with state
-    audio, _vp_zi = sosfilt(_vp_sos, audio, zi=_vp_zi)
+    # FIR highpass (300 Hz) + FIR lowpass (4000 Hz) cascade
+    audio, _hp_zi = lfilter(_hp_taps, 1.0, audio, zi=_hp_zi)
+    audio, _lp_zi = lfilter(_lp_taps, 1.0, audio, zi=_lp_zi)
 
     audio = (audio * 5.0).astype(np.float32)
 
