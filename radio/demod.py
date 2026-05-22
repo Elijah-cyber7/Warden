@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.signal import lfilter, lfilter_zi, resample_poly, butter, sosfilt, sosfilt_zi, firwin, iirnotch, tf2sos
+from scipy.signal import lfilter, lfilter_zi, resample_poly, butter, sosfilt, sosfilt_zi, firwin, iirnotch, tf2sos, decimate
 from config import SAMPLE_RATE, AUDIO_RATE, CHANNEL_BW, SQUELCH
 from audio.player import audio_queue
 from transcription.vosk_engine import transcribe_audio
@@ -8,22 +8,34 @@ import scipy.io.wavfile as wav
 DECIMATE_1 = 50
 INTERMEDIATE_RATE = int(SAMPLE_RATE) // DECIMATE_1
 
-# channel filter with state
-_ch_taps = firwin(256, CHANNEL_BW / 2 / (INTERMEDIATE_RATE / 2))
-_ch_zi_I = lfilter_zi(_ch_taps, 1.0)
-_ch_zi_Q = lfilter_zi(_ch_taps, 1.0)
+# channel filter at FULL sample rate (before decimation)
+_ch_taps = firwin(512, CHANNEL_BW / (SAMPLE_RATE / 2))
+_ch_zi_I = lfilter_zi(_ch_taps, 1.0) * 0
+_ch_zi_Q = lfilter_zi(_ch_taps, 1.0) * 0
 
 # CTCSS notch — convert to SOS for numerical stability
 _notch_b, _notch_a = iirnotch(123.7 / (AUDIO_RATE / 2), Q=10)
 _notch_sos = tf2sos(_notch_b, _notch_a)
-_notch_zi = sosfilt_zi(_notch_sos)
+_notch_zi = sosfilt_zi(_notch_sos) * 0
+
+# de-emphasis filter (750µs time constant for land mobile radio)
+_deemph_tau = 750e-6
+_deemph_alpha = 1.0 / (1.0 + (INTERMEDIATE_RATE * _deemph_tau))
+_deemph_b = np.array([_deemph_alpha])
+_deemph_a = np.array([1.0, -(1.0 - _deemph_alpha)])
+_deemph_zi = lfilter_zi(_deemph_b, _deemph_a) * 0
 
 # voice bandpass with state
 _vp_sos = butter(2, [300 / (AUDIO_RATE / 2), 3200 / (AUDIO_RATE / 2)], btype='band', output='sos')
-_vp_zi = sosfilt_zi(_vp_sos)
+_vp_zi = sosfilt_zi(_vp_sos) * 0
 
 _audio_buffer = []
 _last_sample = np.complex64(1 + 0j)
+
+# soft squelch state
+_squelch_gain = 0.0
+_squelch_attack = 0.05
+_squelch_release = 0.002
 
 
 def _flush_buffer():
@@ -37,41 +49,61 @@ def _flush_buffer():
 
 
 def process_iq(iq):
-    global _audio_buffer, _vp_zi, _notch_zi, _ch_zi_I, _ch_zi_Q, _last_sample
+    global _audio_buffer, _vp_zi, _notch_zi, _ch_zi_I, _ch_zi_Q, _last_sample, _deemph_zi, _squelch_gain
 
-    # decimate first
-    iq_d = iq[::DECIMATE_1]
-
-    # channel filter with state
-    I, _ch_zi_I = lfilter(_ch_taps, 1.0, iq_d.real, zi=_ch_zi_I)
-    Q, _ch_zi_Q = lfilter(_ch_taps, 1.0, iq_d.imag, zi=_ch_zi_Q)
+    # 1. Channel filter at FULL sample rate (before decimation to avoid aliasing)
+    I, _ch_zi_I = lfilter(_ch_taps, 1.0, iq.real, zi=_ch_zi_I)
+    Q, _ch_zi_Q = lfilter(_ch_taps, 1.0, iq.imag, zi=_ch_zi_Q)
     iq_filtered = (I + 1j * Q).astype(np.complex64)
 
-    # squelch on channel power, not wideband IQ
-    channel_power = np.mean(np.abs(iq_filtered) ** 2)
-    print(f"[POWER] {channel_power:.6f}")
-    if channel_power < SQUELCH:
-        _flush_buffer()
+    # 2. Decimate AFTER filtering
+    iq_d = iq_filtered[::DECIMATE_1]
+
+    # 3. Measure channel power for squelch
+    channel_power = np.mean(np.abs(iq_d) ** 2)
+    squelch_open = channel_power >= SQUELCH
+
+    # soft squelch: ramp gain up/down to avoid clicks
+    if squelch_open:
+        _squelch_gain = min(1.0, _squelch_gain + _squelch_attack)
+    else:
+        _squelch_gain = max(0.0, _squelch_gain - _squelch_release)
+
+    # if fully closed and buffer exists, flush it
+    if _squelch_gain < 0.001:
+        if _audio_buffer:
+            _flush_buffer()
         return
 
-    # FM demod with IQ context
-    iq_ext = np.concatenate(([_last_sample], iq_filtered))
-    _last_sample = iq_filtered[-1]
-    conj = iq_ext[:-1] * np.conj(iq_ext[1:])
-    demodulated = np.angle(conj).astype(np.float32)
+    # 4. FM demod with correct phase difference direction
+    iq_ext = np.concatenate(([_last_sample], iq_d))
+    _last_sample = iq_d[-1]
+    # correct order: current * conj(previous) gives positive frequency for positive deviation
+    phase_diff = iq_ext[1:] * np.conj(iq_ext[:-1])
+    demodulated = np.angle(phase_diff).astype(np.float32)
 
-    # resample to audio rate
+    # 5. De-emphasis filter (750µs for land mobile radio)
+    demodulated, _deemph_zi = lfilter(_deemph_b, _deemph_a, demodulated, zi=_deemph_zi)
+
+    # 6. Resample to audio rate
     audio = resample_poly(demodulated, int(AUDIO_RATE), INTERMEDIATE_RATE)
 
-    # CTCSS notch (SOS, stable)
+    # 7. CTCSS notch (SOS, stable)
     audio, _notch_zi = sosfilt(_notch_sos, audio, zi=_notch_zi)
 
-    # voice bandpass with state
+    # 8. Voice bandpass with state
     audio, _vp_zi = sosfilt(_vp_sos, audio, zi=_vp_zi)
 
-    # normalize to [-1, 1] before accumulation and playback
-    rms = np.sqrt(np.mean(audio ** 2)) + 1e-9
-    audio = np.clip((audio / rms) * 0.01, -1.0, 1.0).astype(np.float32)
+    # 9. Gentle normalization with fixed gain (not per-block RMS)
+    # FM deviation for NBFM is ~2.5kHz, which gives max phase change of ~0.98 rad/sample
+    # Scale to reasonable audio level
+    audio = audio * 0.5
+
+    # apply soft squelch gain
+    audio = (audio * _squelch_gain).astype(np.float32)
+
+    # clip to valid range
+    audio = np.clip(audio, -1.0, 1.0)
 
     audio_queue.put(audio)
     _audio_buffer.append(audio)
