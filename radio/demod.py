@@ -1,11 +1,11 @@
 import numpy as np
 from scipy.signal import lfilter, lfilter_zi, resample_poly, sosfilt, sosfilt_zi, firwin, iirnotch
-from config import SAMPLE_RATE, AUDIO_RATE, CHANNEL_BW, SQUELCH
+from config import SAMPLE_RATE, AUDIO_RATE, CHANNEL_BW, SQUELCH, AUDIO_SQUELCH
 from audio.player import audio_queue
 from transcription.vosk_engine import transcribe_audio
 import scipy.io.wavfile as wav
 
-DECIMATE_1 = 50
+DECIMATE_1 = 13
 INTERMEDIATE_RATE = int(SAMPLE_RATE) // DECIMATE_1
 
 # overlap-save parameters for resample_poly
@@ -19,8 +19,8 @@ _ch_zi_I = lfilter_zi(_ch_taps, 1.0)
 _ch_zi_Q = lfilter_zi(_ch_taps, 1.0)
 
 # voice bandpass: FIR highpass (400 Hz) + FIR lowpass (3400 Hz) cascade
-_hp_taps = firwin(801, 400, fs=AUDIO_RATE, pass_zero=False)
-_lp_taps = firwin(801, 3400, fs=AUDIO_RATE, pass_zero=True)
+_hp_taps = firwin(801, 300, fs=AUDIO_RATE, pass_zero=False)
+_lp_taps = firwin(801, 5500, fs=AUDIO_RATE, pass_zero=True)
 _hp_zi = lfilter_zi(_hp_taps, 1.0)
 _lp_zi = lfilter_zi(_lp_taps, 1.0)
 
@@ -29,9 +29,9 @@ _last_I = 0.0
 _last_Q = 0.0
 
 # AGC state
-_agc_gain = 1.0
-_agc_target = 0.3  # target RMS level
-_agc_attack = 0.01  # fast attack for loud signals
+_agc_gain = 10.0
+_agc_target = 0.09 # target RMS level
+_agc_attack = 0.001  # fast attack for loud signals
 _agc_decay = 0.0001  # slow decay to keep gain stable
 
 
@@ -81,21 +81,20 @@ def process_iq(iq):
         audio = audio[discard:]
     _resample_buffer_ready = True
 
-    # FIR highpass (400 Hz) + FIR lowpass (3400 Hz) cascade
     audio, _hp_zi = lfilter(_hp_taps, 1.0, audio, zi=_hp_zi)
     audio, _lp_zi = lfilter(_lp_taps, 1.0, audio, zi=_lp_zi)
-
     # AGC - adjust gain to maintain target level
     rms = np.sqrt(np.mean(audio ** 2)) + 1e-10
     if rms * _agc_gain > _agc_target:
         # too loud, reduce gain quickly
-        _agc_gain = max(0.1, _agc_gain - _agc_attack)
+        _agc_gain = max(0.01, _agc_gain - _agc_attack)
     else:
         # too quiet, increase gain slowly
         _agc_gain = min(50.0, _agc_gain + _agc_decay)
-    
     audio = (audio * _agc_gain).astype(np.float32)
-    audio = np.clip(audio, -1.0, 1.0)
-
+    #audio = np.clip(audio, -1.0, 1.0)
+    rms = np.sqrt(np.mean(audio ** 2))
+    #print(f"RMS: {rms:.6f}")
+    #if rms > AUDIO_SQUELCH:
     audio_queue.put(audio)
     _audio_buffer.append(audio)
