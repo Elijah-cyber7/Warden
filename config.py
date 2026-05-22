@@ -9,7 +9,7 @@ CHANNEL_BW = 12500  # swap to 12500 for NBFM PTT
 AUDIO_RATE = 48000
 SQUELCH = .05
 
-CTCSS_FREQ = 123.7
+CTCSS_FREQ = 127.3
 
 # preamble — callsigns that authorize dispatch
 CALLSIGNS = ["warden", "dispatch"]  # replace with your actual callsigns

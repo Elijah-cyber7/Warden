@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.signal import lfilter, lfilter_zi, butter, sosfilt, sosfilt_zi, firwin, iirnotch, tf2sos
-from config import SAMPLE_RATE, AUDIO_RATE, CHANNEL_BW, SQUELCH
+from config import SAMPLE_RATE, AUDIO_RATE, CHANNEL_BW, SQUELCH, CTCSS_FREQ
 from audio.player import audio_queue
 from transcription.vosk_engine import transcribe_audio
 import scipy.io.wavfile as wav
@@ -27,7 +27,7 @@ _interp_taps = firwin(64, (LOW_RATE / 2) / (AUDIO_RATE / 2)) * INTERP_FACTOR
 _interp_zi = lfilter_zi(_interp_taps, 1.0) * 0
 
 # CTCSS notch — convert to SOS for numerical stability
-_notch_b, _notch_a = iirnotch(123.7 / (AUDIO_RATE / 2), Q=35)
+_notch_b, _notch_a = iirnotch(CTCSS_FREQ / (AUDIO_RATE / 2), Q=35)
 _notch_sos = tf2sos(_notch_b, _notch_a)
 _notch_zi = sosfilt_zi(_notch_sos) * 0
 
