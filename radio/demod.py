@@ -20,7 +20,7 @@ _ch_zi_Q = lfilter_zi(_ch_taps, 1.0)
 
 # voice bandpass: FIR highpass (400 Hz) + FIR lowpass (3400 Hz) cascade
 _hp_taps = firwin(801, 300, fs=AUDIO_RATE, pass_zero=False)
-_lp_taps = firwin(801, 5500, fs=AUDIO_RATE, pass_zero=True)
+_lp_taps = firwin(201, 5500, fs=AUDIO_RATE, pass_zero=True)
 _hp_zi = lfilter_zi(_hp_taps, 1.0)
 _lp_zi = lfilter_zi(_lp_taps, 1.0)
 
@@ -34,12 +34,6 @@ _audio_buffer = []
 _last_I = 0.0
 _last_Q = 0.0
 
-# AGC state
-_agc_gain = 10.0
-_agc_target = 0.09
-_agc_attack = 0.001
-_agc_decay = 0.0001
-
 
 def process_iq(iq):
     global _audio_buffer, _hp_zi, _lp_zi, _ch_zi_I, _ch_zi_Q, _last_I, _last_Q
@@ -49,7 +43,7 @@ def process_iq(iq):
     if iq_power < SQUELCH:
         if _audio_buffer:
             full_audio = np.concatenate(_audio_buffer)
-            wav.write('debug.wav', AUDIO_RATE, (full_audio * 32767).astype(np.int16))
+            wav.write('debug.wav', AUDIO_RATE, (np.clip(full_audio, -1.0, 1.0) * 32767).astype(np.int16))
             transcribe_audio(full_audio)
             _audio_buffer = []
         _resample_buffer = np.array([], dtype=np.float32)
@@ -92,14 +86,6 @@ def process_iq(iq):
     # de-emphasis (750us — compensates RDA1846 default pre-emphasis)
     audio, _deemph_zi = lfilter(_deemph_b, _deemph_a, audio, zi=_deemph_zi)
 
-    # AGC
-    rms = np.sqrt(np.mean(audio ** 2)) + 1e-10
-    if rms * _agc_gain > _agc_target:
-        _agc_gain = max(0.01, _agc_gain - _agc_attack)
-    else:
-        _agc_gain = min(50.0, _agc_gain + _agc_decay)
-    audio = (audio * _agc_gain).astype(np.float32)
-    rms = np.sqrt(np.mean(audio ** 2))
-    if rms > AUDIO_SQUELCH:
-        audio_queue.put(audio)
-        _audio_buffer.append(audio)
+    audio = np.clip(audio * 15.0, -1.0, 1.0).astype(np.float32)
+    audio_queue.put(audio)
+    _audio_buffer.append(audio)

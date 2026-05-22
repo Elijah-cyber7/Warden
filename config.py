@@ -6,11 +6,8 @@ BUFF_SIZE = 1024 * 256
 CHANNEL_BW = 12500  # swap to 12500 for NBFM PTT
 
 # audio
-AUDIO_SQUELCH = 0.005
 AUDIO_RATE = 48000
 SQUELCH = 1.5
-
-CTCSS_FREQ = 123.7
 
 # preamble — callsigns that authorize dispatch
 CALLSIGNS = ["warden", "dispatch"]  # replace with your actual callsigns
