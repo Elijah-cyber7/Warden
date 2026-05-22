@@ -25,11 +25,12 @@ _hp_zi = lfilter_zi(_hp_taps, 1.0)
 _lp_zi = lfilter_zi(_lp_taps, 1.0)
 
 _audio_buffer = []
-_last_sample = np.complex64(1 + 0j)
+_last_I = 0.0
+_last_Q = 0.0
 
 
 def process_iq(iq):
-    global _audio_buffer, _hp_zi, _lp_zi, _ch_zi_I, _ch_zi_Q, _last_sample
+    global _audio_buffer, _hp_zi, _lp_zi, _ch_zi_I, _ch_zi_Q, _last_I, _last_Q
     global _resample_buffer, _resample_buffer_ready
 
     iq_power = np.mean(np.abs(iq) ** 2)
@@ -49,13 +50,20 @@ def process_iq(iq):
     # channel filter with state
     I, _ch_zi_I = lfilter(_ch_taps, 1.0, iq_d.real, zi=_ch_zi_I)
     Q, _ch_zi_Q = lfilter(_ch_taps, 1.0, iq_d.imag, zi=_ch_zi_Q)
-    iq_filtered = (I + 1j * Q).astype(np.complex64)
 
-    # FM demod with IQ context
-    iq_ext = np.concatenate(([_last_sample], iq_filtered))
-    _last_sample = iq_filtered[-1]
-    conj = iq_ext[:-1] * np.conj(iq_ext[1:])
-    demodulated = np.angle(conj).astype(np.float32)
+    # Quadrature FM demod: (I * dQ - Q * dI) / (I² + Q²)
+    # Compute derivatives
+    I_ext = np.concatenate(([_last_I], I))
+    Q_ext = np.concatenate(([_last_Q], Q))
+    _last_I = I[-1]
+    _last_Q = Q[-1]
+    
+    dI = np.diff(I_ext)
+    dQ = np.diff(Q_ext)
+    
+    # Quadrature demod formula
+    mag_sq = I**2 + Q**2 + 1e-10  # avoid division by zero
+    demodulated = ((I * dQ - Q * dI) / mag_sq).astype(np.float32)
 
     # overlap-save resample: 160 kHz -> 48 kHz
     if len(_resample_buffer) > 0:
