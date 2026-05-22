@@ -9,7 +9,7 @@ DECIMATE_1 = 50
 INTERMEDIATE_RATE = int(SAMPLE_RATE) // DECIMATE_1  # 160 kHz
 
 # overlap-save parameters
-_resample_overlap = 512
+_resample_overlap = 1024
 _resample_buffer = np.array([], dtype=np.float32)
 _resample_buffer_ready = False
 
@@ -24,12 +24,12 @@ _notch_sos = tf2sos(_notch_b, _notch_a)
 _notch_zi = sosfilt_zi(_notch_sos)
 
 # DC block — removes DC bias before voice filtering
-_dc_taps = firwin(101, 50, fs=AUDIO_RATE, pass_zero=False)
+_dc_taps = firwin(401, 100, fs=AUDIO_RATE, pass_zero=False)
 _dc_zi = lfilter_zi(_dc_taps, 1.0)
 
 # voice bandpass: FIR highpass (200 Hz) + FIR lowpass (2000 Hz) cascade
-_hp_taps = firwin(201, 200, fs=AUDIO_RATE, pass_zero=False)
-_lp_taps = firwin(401, 2000, fs=AUDIO_RATE, pass_zero=True)
+_hp_taps = firwin(401, 400, fs=AUDIO_RATE, pass_zero=False)
+_lp_taps = firwin(401, 3000, fs=AUDIO_RATE, pass_zero=True)
 _hp_zi = lfilter_zi(_hp_taps, 1.0)
 _lp_zi = lfilter_zi(_lp_taps, 1.0)
 
