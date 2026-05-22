@@ -39,9 +39,9 @@ _agc_decay = 0.0001  # slow decay to keep gain stable
 _sq_hf_taps = firwin(65, 5000, fs=INTERMEDIATE_RATE, pass_zero=False)  # highpass at 5kHz
 _sq_hf_zi = lfilter_zi(_sq_hf_taps, 1.0)
 _sq_open = False
-_sq_open_thresh = 0.15  # noise level to open squelch
-_sq_close_thresh = 0.25  # noise level to close squelch (hysteresis)
-_sq_gain = 0.0  # soft squelch gain for smooth transitions
+_sq_open_thresh = 1.5  # noise level to open squelch
+_sq_close_thresh = 1.0  # noise level to close squelch (hysteresis)
+_sq_gain = 0.01  # soft squelch gain for smooth transitions
 _sq_attack = 0.1  # fast open
 _sq_release = 0.01  # slower close
 
@@ -91,7 +91,7 @@ def process_iq(iq):
         _sq_gain = max(0.0, _sq_gain - _sq_release)
     
     # If squelch fully closed, flush buffer and skip
-    if _sq_gain < 0.001:
+    if _sq_gain < 0.01:
         if _audio_buffer:
             full_audio = np.concatenate(_audio_buffer)
             wav.write('debug.wav', AUDIO_RATE, (full_audio * 32767).astype(np.int16))
