@@ -19,21 +19,9 @@ def transcribe_audio(audio_48k: np.ndarray):
 
     accepted = recognizer.AcceptWaveform(pcm)
     print(f"[VOSK] accepted={accepted}")
-    if accepted:
-        result = json.loads(recognizer.Result())
-        text = result.get("text", "").strip()
-        if text:
-            print(f"\n[FINAL] {text}")
-            check_preamble(text)
-    else:
-        partial = json.loads(recognizer.PartialResult())
-        p = partial.get("partial", "").strip()
-        if p:
-            print(f"\r[LIVE] {p}    ", end="", flush=True)
-
-    # always drain final result after buffer flush
+    
+    # Get final result (this also resets the recognizer for next utterance)
     final = json.loads(recognizer.FinalResult())
-    print(f"[FINAL RESULT] {final}")
     text = final.get("text", "").strip()
     if text:
         print(f"\n[FINAL] {text}")

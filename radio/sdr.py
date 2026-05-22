@@ -6,6 +6,8 @@ from radio.demod import process_iq
 
 def init_sdr():
     results = SoapySDR.Device.enumerate()
+    if not results:
+        raise RuntimeError("No SDR devices found - check USB connection")
     print(f"Found devices: {results}")
     sdr = SoapySDR.Device(results[0])
     sdr.setSampleRate(SoapySDR.SOAPY_SDR_RX, 0, SAMPLE_RATE)

@@ -1,19 +1,19 @@
 import numpy as np
-from scipy.signal import lfilter, lfilter_zi, resample_poly, sosfilt, sosfilt_zi, firwin, iirnotch
-from config import SAMPLE_RATE, AUDIO_RATE, CHANNEL_BW, SQUELCH
+from scipy.signal import lfilter, lfilter_zi, resample_poly, firwin
+from config import SAMPLE_RATE, AUDIO_RATE, CHANNEL_BW
 from audio.player import audio_queue
 from transcription.vosk_engine import transcribe_audio
 import scipy.io.wavfile as wav
 
 DECIMATE_1 = 50
-INTERMEDIATE_RATE = int(SAMPLE_RATE) // DECIMATE_1
+INTERMEDIATE_RATE = int(SAMPLE_RATE) // DECIMATE_1  # 2MHz/50 = 40kHz
 
 # overlap-save parameters for resample_poly
 _resample_overlap = 1024
 _resample_buffer = np.array([], dtype=np.float32)
 _resample_buffer_ready = False
 
-# channel filter with state
+# channel filter with state (lowpass at CHANNEL_BW/2 = 6.25kHz)
 _ch_taps = firwin(128, CHANNEL_BW / 2 / (INTERMEDIATE_RATE / 2))
 _ch_zi_I = lfilter_zi(_ch_taps, 1.0)
 _ch_zi_Q = lfilter_zi(_ch_taps, 1.0)
@@ -44,6 +44,19 @@ _sq_close_thresh = 1.0  # noise level to close squelch (hysteresis)
 _sq_gain = 0.01  # soft squelch gain for smooth transitions
 _sq_attack = 0.1  # fast open
 _sq_release = 0.01  # slower close
+
+
+def _reset_filter_states():
+    """Reset all filter states for clean start on new transmission."""
+    global _ch_zi_I, _ch_zi_Q, _hp_zi, _lp_zi, _sq_hf_zi, _agc_gain, _last_I, _last_Q
+    _ch_zi_I = lfilter_zi(_ch_taps, 1.0)
+    _ch_zi_Q = lfilter_zi(_ch_taps, 1.0)
+    _hp_zi = lfilter_zi(_hp_taps, 1.0)
+    _lp_zi = lfilter_zi(_lp_taps, 1.0)
+    _sq_hf_zi = lfilter_zi(_sq_hf_taps, 1.0)
+    _agc_gain = 1.0
+    _last_I = 0.0
+    _last_Q = 0.0
 
 
 def process_iq(iq):
@@ -99,9 +112,10 @@ def process_iq(iq):
             _audio_buffer = []
         _resample_buffer = np.array([], dtype=np.float32)
         _resample_buffer_ready = False
+        _reset_filter_states()  # clean start for next transmission
         return
 
-    # overlap-save resample: 160 kHz -> 48 kHz
+    # overlap-save resample: 40 kHz -> 48 kHz
     if len(_resample_buffer) > 0:
         demodulated = np.concatenate([_resample_buffer, demodulated])
     _resample_buffer = demodulated[-_resample_overlap:].copy()
@@ -111,18 +125,17 @@ def process_iq(iq):
         audio = audio[discard:]
     _resample_buffer_ready = True
 
-    # FIR highpass (200 Hz) + FIR lowpass (4500 Hz) cascade
+    # voice bandpass: FIR highpass (400 Hz) + FIR lowpass (3400 Hz)
     audio, _hp_zi = lfilter(_hp_taps, 1.0, audio, zi=_hp_zi)
     audio, _lp_zi = lfilter(_lp_taps, 1.0, audio, zi=_lp_zi)
 
-    # AGC - adjust gain to maintain target level
-    rms = np.sqrt(np.mean(audio ** 2)) + 1e-10
-    if rms * _agc_gain > _agc_target:
-        # too loud, reduce gain quickly
-        _agc_gain = max(0.1, _agc_gain - _agc_attack)
-    else:
-        # too quiet, increase gain slowly
-        _agc_gain = min(50.0, _agc_gain + _agc_decay)
+    # AGC - only adjust when squelch fully open to avoid pumping during transitions
+    if _sq_gain >= 0.99:
+        rms = np.sqrt(np.mean(audio ** 2)) + 1e-10
+        if rms * _agc_gain > _agc_target:
+            _agc_gain = max(0.1, _agc_gain - _agc_attack)
+        else:
+            _agc_gain = min(50.0, _agc_gain + _agc_decay)
     
     audio = (audio * _agc_gain).astype(np.float32)
     
