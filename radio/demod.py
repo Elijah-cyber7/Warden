@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.signal import lfilter, lfilter_zi, butter, sosfilt, sosfilt_zi, firwin, iirnotch, tf2sos
+from scipy.signal import lfilter, lfilter_zi, butter, sosfilt, sosfilt_zi, firwin, iirnotch, tf2sos, resample_poly
 from config import SAMPLE_RATE, AUDIO_RATE, CHANNEL_BW, SQUELCH, CTCSS_FREQ
 from audio.player import audio_queue
 from transcription.vosk_engine import transcribe_audio
@@ -8,23 +8,15 @@ import scipy.io.wavfile as wav
 DECIMATE_1 = 50
 INTERMEDIATE_RATE = int(SAMPLE_RATE) // DECIMATE_1  # 160 kHz
 
-DECIMATE_2 = 10
-LOW_RATE = INTERMEDIATE_RATE // DECIMATE_2  # 16 kHz
-
-INTERP_FACTOR = 3  # 16 kHz * 3 = 48 kHz
+# Overlap-save parameters for resample_poly
+# resample_poly uses a FIR filter internally; we need to overlap by the filter length
+_resample_overlap = 256  # samples to carry over between chunks
+_resample_buffer = np.array([], dtype=np.float32)
 
 # channel filter at FULL sample rate (before decimation to prevent aliasing)
 _ch_taps = firwin(256, CHANNEL_BW / 2 / (SAMPLE_RATE / 2))
 _ch_zi_I = lfilter_zi(_ch_taps, 1.0) * 0
 _ch_zi_Q = lfilter_zi(_ch_taps, 1.0) * 0
-
-# second decimation filter (160 kHz -> 16 kHz)
-_decim2_taps = firwin(64, (LOW_RATE / 2) / (INTERMEDIATE_RATE / 2))
-_decim2_zi = lfilter_zi(_decim2_taps, 1.0) * 0
-
-# interpolation filter (16 kHz -> 48 kHz)
-_interp_taps = firwin(64, (LOW_RATE / 2) / (AUDIO_RATE / 2)) * INTERP_FACTOR
-_interp_zi = lfilter_zi(_interp_taps, 1.0) * 0
 
 # CTCSS notch — convert to SOS for numerical stability
 _notch_b, _notch_a = iirnotch(CTCSS_FREQ / (AUDIO_RATE / 2), Q=35)
@@ -50,7 +42,7 @@ def _flush_buffer():
 
 
 def process_iq(iq):
-    global _audio_buffer, _vp_zi, _notch_zi, _ch_zi_I, _ch_zi_Q, _last_sample, _decim2_zi, _interp_zi
+    global _audio_buffer, _vp_zi, _notch_zi, _ch_zi_I, _ch_zi_Q, _last_sample, _resample_buffer
 
     # 1. Channel filter at FULL sample rate (before decimation to prevent aliasing)
     I, _ch_zi_I = lfilter(_ch_taps, 1.0, iq.real, zi=_ch_zi_I)
@@ -64,6 +56,7 @@ def process_iq(iq):
     channel_power = np.mean(np.abs(iq_d) ** 2)
     if channel_power < SQUELCH:
         _flush_buffer()
+        _resample_buffer = np.array([], dtype=np.float32)  # reset on squelch
         return
 
     # 3. FM demod with IQ context
@@ -72,23 +65,30 @@ def process_iq(iq):
     conj = iq_ext[:-1] * np.conj(iq_ext[1:])
     demodulated = np.angle(conj).astype(np.float32)
 
-    # 4. Stateful decimation: 160 kHz -> 16 kHz
-    filtered, _decim2_zi = lfilter(_decim2_taps, 1.0, demodulated, zi=_decim2_zi)
-    audio_16k = filtered[::DECIMATE_2]
+    # 4. Overlap-save resampling: 160 kHz -> 48 kHz
+    # Prepend overlap from previous chunk
+    if len(_resample_buffer) > 0:
+        demodulated = np.concatenate([_resample_buffer, demodulated])
+    
+    # Save overlap for next chunk
+    _resample_buffer = demodulated[-_resample_overlap:].copy()
+    
+    # Resample the full buffer
+    audio = resample_poly(demodulated, int(AUDIO_RATE), INTERMEDIATE_RATE)
+    
+    # Discard the output corresponding to the overlap region
+    # Output samples to discard = overlap * (AUDIO_RATE / INTERMEDIATE_RATE)
+    discard = int(_resample_overlap * AUDIO_RATE / INTERMEDIATE_RATE)
+    if len(_resample_buffer) == _resample_overlap and discard > 0:
+        audio = audio[discard:]
 
-    # 5. Stateful interpolation: 16 kHz -> 48 kHz
-    upsampled = np.zeros(len(audio_16k) * INTERP_FACTOR, dtype=np.float32)
-    upsampled[::INTERP_FACTOR] = audio_16k
-    audio, _interp_zi = lfilter(_interp_taps, 1.0, upsampled, zi=_interp_zi)
-    audio = audio.astype(np.float32)
-
-    # 6. CTCSS notch (SOS, stable)
+    # 5. CTCSS notch (SOS, stable)
     audio, _notch_zi = sosfilt(_notch_sos, audio, zi=_notch_zi)
 
-    # 7. Voice bandpass with state
+    # 6. Voice bandpass with state
     audio, _vp_zi = sosfilt(_vp_sos, audio, zi=_vp_zi)
 
-    # 8. Fixed gain
+    # 7. Fixed gain
     audio = np.clip(audio * 8.0, -1.0, 1.0).astype(np.float32)
 
     audio_queue.put(audio)
