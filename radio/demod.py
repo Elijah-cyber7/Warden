@@ -28,10 +28,16 @@ _audio_buffer = []
 _last_I = 0.0
 _last_Q = 0.0
 
+# AGC state
+_agc_gain = 1.0
+_agc_target = 0.3  # target RMS level
+_agc_attack = 0.01  # fast attack for loud signals
+_agc_decay = 0.0001  # slow decay to keep gain stable
+
 
 def process_iq(iq):
     global _audio_buffer, _hp_zi, _lp_zi, _ch_zi_I, _ch_zi_Q, _last_I, _last_Q
-    global _resample_buffer, _resample_buffer_ready
+    global _resample_buffer, _resample_buffer_ready, _agc_gain
 
     iq_power = np.mean(np.abs(iq) ** 2)
     if iq_power < SQUELCH:
@@ -79,7 +85,17 @@ def process_iq(iq):
     audio, _hp_zi = lfilter(_hp_taps, 1.0, audio, zi=_hp_zi)
     audio, _lp_zi = lfilter(_lp_taps, 1.0, audio, zi=_lp_zi)
 
-    audio = (audio * 15.0).astype(np.float32)
+    # AGC - adjust gain to maintain target level
+    rms = np.sqrt(np.mean(audio ** 2)) + 1e-10
+    if rms * _agc_gain > _agc_target:
+        # too loud, reduce gain quickly
+        _agc_gain = max(0.1, _agc_gain - _agc_attack)
+    else:
+        # too quiet, increase gain slowly
+        _agc_gain = min(50.0, _agc_gain + _agc_decay)
+    
+    audio = (audio * _agc_gain).astype(np.float32)
+    audio = np.clip(audio, -1.0, 1.0)
 
     audio_queue.put(audio)
     _audio_buffer.append(audio)
