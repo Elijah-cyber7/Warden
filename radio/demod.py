@@ -27,12 +27,12 @@ _interp_taps = firwin(64, (LOW_RATE / 2) / (AUDIO_RATE / 2)) * INTERP_FACTOR
 _interp_zi = lfilter_zi(_interp_taps, 1.0) * 0
 
 # CTCSS notch — convert to SOS for numerical stability
-_notch_b, _notch_a = iirnotch(123.7 / (AUDIO_RATE / 2), Q=10)
+_notch_b, _notch_a = iirnotch(123.7 / (AUDIO_RATE / 2), Q=35)
 _notch_sos = tf2sos(_notch_b, _notch_a)
 _notch_zi = sosfilt_zi(_notch_sos) * 0
 
 # voice bandpass with state
-_vp_sos = butter(2, [300 / (AUDIO_RATE / 2), 3200 / (AUDIO_RATE / 2)], btype='band', output='sos')
+_vp_sos = butter(6, [200 / (AUDIO_RATE / 2), 2500 / (AUDIO_RATE / 2)], btype='band', output='sos')
 _vp_zi = sosfilt_zi(_vp_sos) * 0
 
 _audio_buffer = []
@@ -62,7 +62,6 @@ def process_iq(iq):
 
     # squelch on channel power
     channel_power = np.mean(np.abs(iq_d) ** 2)
-    print(f"[POWER] {channel_power:.6f}")
     if channel_power < SQUELCH:
         _flush_buffer()
         return
