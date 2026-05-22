@@ -34,28 +34,22 @@ _agc_target = 0.3  # target RMS level
 _agc_attack = 0.01  # fast attack for loud signals
 _agc_decay = 0.0001  # slow decay to keep gain stable
 
-# Noise gate state
-_gate_threshold = 0.02  # RMS threshold to open gate
-_gate_open = False
-_gate_attack = 0.005  # fast open
-_gate_release = 0.0005  # slow close to avoid cutting words
-_gate_gain = 0.0
+# Discriminator squelch with hysteresis
+# Measures high-frequency noise in demod output - high noise = no signal
+_sq_hf_taps = firwin(65, 5000, fs=INTERMEDIATE_RATE, pass_zero=False)  # highpass at 5kHz
+_sq_hf_zi = lfilter_zi(_sq_hf_taps, 1.0)
+_sq_open = False
+_sq_open_thresh = 0.15  # noise level to open squelch
+_sq_close_thresh = 0.25  # noise level to close squelch (hysteresis)
+_sq_gain = 0.0  # soft squelch gain for smooth transitions
+_sq_attack = 0.1  # fast open
+_sq_release = 0.01  # slower close
 
 
 def process_iq(iq):
     global _audio_buffer, _hp_zi, _lp_zi, _ch_zi_I, _ch_zi_Q, _last_I, _last_Q
-    global _resample_buffer, _resample_buffer_ready, _agc_gain, _gate_gain
-
-    iq_power = np.mean(np.abs(iq) ** 2)
-    if iq_power < SQUELCH:
-        if _audio_buffer:
-            full_audio = np.concatenate(_audio_buffer)
-            wav.write('debug.wav', AUDIO_RATE, (full_audio * 32767).astype(np.int16))
-            transcribe_audio(full_audio)
-            _audio_buffer = []
-        _resample_buffer = np.array([], dtype=np.float32)
-        _resample_buffer_ready = False
-        return
+    global _resample_buffer, _resample_buffer_ready, _agc_gain
+    global _sq_hf_zi, _sq_open, _sq_gain
 
     # decimate
     iq_d = iq[::DECIMATE_1]
@@ -77,6 +71,35 @@ def process_iq(iq):
     # Quadrature demod formula
     mag_sq = I**2 + Q**2 + 1e-10  # avoid division by zero
     demodulated = ((I * dQ - Q * dI) / mag_sq).astype(np.float32)
+
+    # Discriminator squelch - measure high-frequency noise content
+    hf_noise, _sq_hf_zi = lfilter(_sq_hf_taps, 1.0, demodulated, zi=_sq_hf_zi)
+    noise_level = np.sqrt(np.mean(hf_noise ** 2))
+    
+    # Hysteresis: different thresholds for opening vs closing
+    if _sq_open:
+        if noise_level > _sq_close_thresh:
+            _sq_open = False
+    else:
+        if noise_level < _sq_open_thresh:
+            _sq_open = True
+    
+    # Soft squelch transition
+    if _sq_open:
+        _sq_gain = min(1.0, _sq_gain + _sq_attack)
+    else:
+        _sq_gain = max(0.0, _sq_gain - _sq_release)
+    
+    # If squelch fully closed, flush buffer and skip
+    if _sq_gain < 0.001:
+        if _audio_buffer:
+            full_audio = np.concatenate(_audio_buffer)
+            wav.write('debug.wav', AUDIO_RATE, (full_audio * 32767).astype(np.int16))
+            transcribe_audio(full_audio)
+            _audio_buffer = []
+        _resample_buffer = np.array([], dtype=np.float32)
+        _resample_buffer_ready = False
+        return
 
     # overlap-save resample: 160 kHz -> 48 kHz
     if len(_resample_buffer) > 0:
@@ -103,13 +126,8 @@ def process_iq(iq):
     
     audio = (audio * _agc_gain).astype(np.float32)
     
-    # Noise gate - mute when signal is below threshold
-    rms_post = np.sqrt(np.mean(audio ** 2)) + 1e-10
-    if rms_post > _gate_threshold:
-        _gate_gain = min(1.0, _gate_gain + _gate_attack)
-    else:
-        _gate_gain = max(0.0, _gate_gain - _gate_release)
-    audio = audio * _gate_gain
+    # Apply soft squelch gain
+    audio = audio * _sq_gain
     
     # Output gain boost
     audio = audio * 3.0
