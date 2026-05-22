@@ -8,8 +8,8 @@ import scipy.io.wavfile as wav
 DECIMATE_1 = 50
 INTERMEDIATE_RATE = int(SAMPLE_RATE) // DECIMATE_1
 
-# channel filter with state
-_ch_taps = firwin(256, CHANNEL_BW / 2 / (INTERMEDIATE_RATE / 2))
+# channel filter at FULL sample rate (before decimation to prevent aliasing)
+_ch_taps = firwin(256, CHANNEL_BW / 2 / (SAMPLE_RATE / 2))
 _ch_zi_I = lfilter_zi(_ch_taps, 1.0)
 _ch_zi_Q = lfilter_zi(_ch_taps, 1.0)
 
@@ -39,24 +39,24 @@ def _flush_buffer():
 def process_iq(iq):
     global _audio_buffer, _vp_zi, _notch_zi, _ch_zi_I, _ch_zi_Q, _last_sample
 
-    # decimate first
-    iq_d = iq[::DECIMATE_1]
-
-    # channel filter with state
-    I, _ch_zi_I = lfilter(_ch_taps, 1.0, iq_d.real, zi=_ch_zi_I)
-    Q, _ch_zi_Q = lfilter(_ch_taps, 1.0, iq_d.imag, zi=_ch_zi_Q)
+    # 1. Channel filter at FULL sample rate (before decimation to prevent aliasing)
+    I, _ch_zi_I = lfilter(_ch_taps, 1.0, iq.real, zi=_ch_zi_I)
+    Q, _ch_zi_Q = lfilter(_ch_taps, 1.0, iq.imag, zi=_ch_zi_Q)
     iq_filtered = (I + 1j * Q).astype(np.complex64)
 
-    # squelch on channel power, not wideband IQ
-    channel_power = np.mean(np.abs(iq_filtered) ** 2)
+    # 2. Decimate AFTER filtering
+    iq_d = iq_filtered[::DECIMATE_1]
+
+    # squelch on channel power
+    channel_power = np.mean(np.abs(iq_d) ** 2)
     print(f"[POWER] {channel_power:.6f}")
     if channel_power < SQUELCH:
         _flush_buffer()
         return
 
     # FM demod with IQ context
-    iq_ext = np.concatenate(([_last_sample], iq_filtered))
-    _last_sample = iq_filtered[-1]
+    iq_ext = np.concatenate(([_last_sample], iq_d))
+    _last_sample = iq_d[-1]
     conj = iq_ext[:-1] * np.conj(iq_ext[1:])
     demodulated = np.angle(conj).astype(np.float32)
 
@@ -69,9 +69,8 @@ def process_iq(iq):
     # voice bandpass with state
     audio, _vp_zi = sosfilt(_vp_sos, audio, zi=_vp_zi)
 
-    # normalize to [-1, 1] before accumulation and playback
-    rms = np.sqrt(np.mean(audio ** 2)) + 1e-9
-    audio = np.clip((audio / rms) * 0.01, -1.0, 1.0).astype(np.float32)
+    # fixed gain instead of RMS normalization (preserves voice/noise difference)
+    audio = np.clip(audio * 8.0, -1.0, 1.0).astype(np.float32)
 
     audio_queue.put(audio)
     _audio_buffer.append(audio)
