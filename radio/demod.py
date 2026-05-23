@@ -2,7 +2,7 @@ import numpy as np
 from scipy.signal import lfilter, lfilter_zi, resample_poly,firwin
 from config import SAMPLE_RATE, AUDIO_RATE, CHANNEL_BW, SQUELCH
 from audio.player import audio_queue
-from transcription.vosk_engine import transcribe_audio
+from transcription.whisper_engine import transcribe_audio
 import scipy.io.wavfile as wav
 
 DECIMATE_1 = 13
