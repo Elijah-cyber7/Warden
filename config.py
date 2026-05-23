@@ -10,4 +10,4 @@ AUDIO_RATE = 48000
 SQUELCH = 1.5
 
 # preamble — callsigns that authorize dispatch
-CALLSIGNS = ["warden", "dispatch"]  # replace with your actual callsigns
+CALLSIGNS = ["Alpha X-Ray 3-1", "dispatch"]  # replace with your actual callsigns

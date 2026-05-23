@@ -1,3 +1,7 @@
+import os
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+os.environ['OMP_NUM_THREADS'] = '1'
+
 import threading
 from audio.player import audio_worker
 from radio.sdr import init_sdr, rx_loop
