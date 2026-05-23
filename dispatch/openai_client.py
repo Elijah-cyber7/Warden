@@ -13,7 +13,7 @@ DEFAULT_SYSTEM_PROMPT = (
 )
 
 
-def _get_client() -> OpenAI:
+def get_client() -> OpenAI:
     global _client
     if _client is None:
         if not OPENAI_API_KEY:
@@ -24,7 +24,7 @@ def _get_client() -> OpenAI:
 
 def chat(message: str, system_prompt: str = DEFAULT_SYSTEM_PROMPT) -> str:
     """Send a message to OpenAI and return the assistant reply."""
-    response = _get_client().chat.completions.create(
+    response = get_client().chat.completions.create(
         model=OPENAI_MODEL,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -43,6 +43,8 @@ def chat_async(message: str, on_reply=None, on_error=None, system_prompt: str = 
                 on_reply(reply)
             else:
                 print(f"\n[OPENAI] {reply}\n")
+                from audio.tts import speak
+                speak(reply)
         except Exception as e:
             if on_error:
                 on_error(e)

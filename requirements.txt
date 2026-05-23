@@ -10,6 +10,9 @@ mlx-whisper
 openai
 python-dotenv
 
+# TTS (local)
+piper-tts
+
 # Note: SoapySDR must be installed via system package manager:
 #   brew install soapysdr soapyhackrf hackrf  (macOS)
 #   apt install python3-soapysdr soapysdr-module-hackrf  (Debian/Ubuntu)

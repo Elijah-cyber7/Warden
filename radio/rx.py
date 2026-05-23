@@ -5,11 +5,9 @@ Handles the receive pipeline: SDR -> demod -> audio -> transcription.
 """
 
 import numpy as np
-import scipy.io.wavfile as wav
-from config import AUDIO_RATE, SQUELCH_THRESHOLD
+from config import SQUELCH_THRESHOLD
 from radio.sdr import SDRDevice
 from radio.demod import FMDemodulator
-from audio.player import audio_queue
 from transcription.whisper_engine import transcribe_audio
 
 
@@ -53,7 +51,6 @@ class RXProcessor:
             return
         
         audio = self._demod.process(iq)
-        audio_queue.put(audio)
         self._audio_buffer.append(audio)
     
     def _flush_buffer(self):
@@ -65,6 +62,5 @@ class RXProcessor:
         self._audio_buffer = []
         
         self._demod.reset()
-        
-        wav.write('debug.wav', AUDIO_RATE, (np.clip(full_audio, -1.0, 1.0) * 32767).astype(np.int16))
+
         transcribe_audio(full_audio)

@@ -91,3 +91,11 @@ CALLSIGNS = ["Alpha X-Ray 3-1", "Bravo 7", "dispatch"]  # Preamble trigger words
 WHISPER_INITIAL_PROMPT = ", ".join(CALLSIGNS) + ". Two-way radio dispatch."
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+# -----------------------------------------------------------------------------
+# TTS (Piper — local)
+# Download voice: python3 -m piper.download_voices en_US-lessac-medium --download-dir voices
+# -----------------------------------------------------------------------------
+PIPER_VOICES_DIR = Path(__file__).parent / "voices"
+PIPER_VOICE = os.getenv("PIPER_VOICE", "en_US-lessac-medium")
+TTS_OUTPUT = os.getenv("TTS_OUTPUT", "speakers")  # transmit | speakers | both

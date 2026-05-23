@@ -10,3 +10,7 @@ __pycache__/
 
 # Debug artifacts
 debug.wav
+
+# Piper voice models
+voices/
+.DS_Store
