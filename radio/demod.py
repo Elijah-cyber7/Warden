@@ -1,6 +1,6 @@
 import numpy as np
-from scipy.signal import lfilter, lfilter_zi, resample_poly, sosfilt, sosfilt_zi, firwin, iirnotch
-from config import SAMPLE_RATE, AUDIO_RATE, CHANNEL_BW, SQUELCH, AUDIO_SQUELCH
+from scipy.signal import lfilter, lfilter_zi, resample_poly,firwin
+from config import SAMPLE_RATE, AUDIO_RATE, CHANNEL_BW, SQUELCH
 from audio.player import audio_queue
 from transcription.vosk_engine import transcribe_audio
 import scipy.io.wavfile as wav
@@ -19,8 +19,8 @@ _ch_zi_I = lfilter_zi(_ch_taps, 1.0)
 _ch_zi_Q = lfilter_zi(_ch_taps, 1.0)
 
 # voice bandpass: FIR highpass (400 Hz) + FIR lowpass (3400 Hz) cascade
-_hp_taps = firwin(801, 300, fs=AUDIO_RATE, pass_zero=False)
-_lp_taps = firwin(201, 5500, fs=AUDIO_RATE, pass_zero=True)
+_hp_taps = firwin(401, 400, fs=AUDIO_RATE, pass_zero=False)
+_lp_taps = firwin(401, 4000, fs=AUDIO_RATE, pass_zero=True)
 _hp_zi = lfilter_zi(_hp_taps, 1.0)
 _lp_zi = lfilter_zi(_lp_taps, 1.0)
 
@@ -86,6 +86,6 @@ def process_iq(iq):
     # de-emphasis (750us — compensates RDA1846 default pre-emphasis)
     audio, _deemph_zi = lfilter(_deemph_b, _deemph_a, audio, zi=_deemph_zi)
 
-    audio = np.clip(audio * 15.0, -1.0, 1.0).astype(np.float32)
+    audio = np.clip(audio * 25.0, -1.0, 1.0).astype(np.float32)
     audio_queue.put(audio)
     _audio_buffer.append(audio)
