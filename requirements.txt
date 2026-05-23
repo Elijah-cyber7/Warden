@@ -4,7 +4,11 @@ scipy
 sounddevice
 
 # Transcription
-openai-whisper
+mlx-whisper
+
+# Dispatch
+openai
+python-dotenv
 
 # Note: SoapySDR must be installed via system package manager:
 #   brew install soapysdr soapyhackrf hackrf  (macOS)

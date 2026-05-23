@@ -1,7 +1,10 @@
 import mlx_whisper
 import numpy as np
 from scipy.signal import resample_poly
-from config import AUDIO_RATE, WHISPER_MODEL, MIN_AUDIO_DURATION, NO_SPEECH_THRESHOLD
+from config import (
+    AUDIO_RATE, WHISPER_MODEL, MIN_AUDIO_DURATION, NO_SPEECH_THRESHOLD,
+    WHISPER_INITIAL_PROMPT,
+)
 from dispatch.preamble import check_preamble
 
 WHISPER_RATE = 16000
@@ -22,6 +25,7 @@ def transcribe_audio(audio_48k: np.ndarray):
         audio_16k,
         path_or_hf_repo=WHISPER_MODEL,
         language="en",
+        initial_prompt=WHISPER_INITIAL_PROMPT,
     )
 
     segments = result.get("segments", [])

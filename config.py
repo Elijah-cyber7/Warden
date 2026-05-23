@@ -2,6 +2,13 @@
 # WARDEN CONFIGURATION
 # =============================================================================
 
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).parent / ".env")
+
 # -----------------------------------------------------------------------------
 # SDR Hardware
 # -----------------------------------------------------------------------------
@@ -80,4 +87,7 @@ NO_SPEECH_THRESHOLD = 0.6   # Reject if no_speech_prob exceeds this
 # -----------------------------------------------------------------------------
 # Dispatch
 # -----------------------------------------------------------------------------
-CALLSIGNS = ["Alpha X-Ray 3-1", "dispatch"]  # Preamble trigger words
+CALLSIGNS = ["Alpha X-Ray 3-1", "Bravo 7", "dispatch"]  # Preamble trigger words
+WHISPER_INITIAL_PROMPT = ", ".join(CALLSIGNS) + ". Two-way radio dispatch."
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
