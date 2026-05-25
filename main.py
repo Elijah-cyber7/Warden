@@ -6,9 +6,8 @@ import threading
 from config import OPENAI_API_KEY
 from audio.player import audio_worker, audio_queue
 from radio.sdr import SDRDevice
-from radio.rx import RXProcessor
-from radio.tx import TXProcessor
-from audio.tts import set_tx_processor
+from radio.controller import RadioController
+from audio.tts import set_radio_controller
 
 
 def main():
@@ -24,14 +23,14 @@ def main():
         print("[WARDEN] Failed to open SDR device")
         return 1
 
-    set_tx_processor(TXProcessor(sdr))
-    rx = RXProcessor(sdr)
+    radio = RadioController(sdr)
+    set_radio_controller(radio)
     
     try:
-        rx.start()
+        radio.start_rx()
     except KeyboardInterrupt:
         print("\n[WARDEN] Shutdown requested...")
-        rx.stop()
+        radio.stop()
     finally:
         sdr.close()
     

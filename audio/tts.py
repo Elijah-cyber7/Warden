@@ -11,14 +11,14 @@ from config import AUDIO_RATE, PIPER_VOICE, PIPER_VOICES_DIR, TTS_OUTPUT
 from audio.player import audio_queue
 
 _voice = None
-_tx_processor = None
+_radio_controller = None
 _tx_lock = threading.Lock()
 
 
-def set_tx_processor(processor):
-    """Register the TX pipeline (called once from main.py)."""
-    global _tx_processor
-    _tx_processor = processor
+def set_radio_controller(controller):
+    """Register the radio controller (called once from main.py)."""
+    global _radio_controller
+    _radio_controller = controller
 
 
 def _get_voice() -> PiperVoice:
@@ -61,11 +61,11 @@ def speak(text: str):
     audio = synthesize_speech(text)
 
     if TTS_OUTPUT in ("transmit", "both"):
-        if _tx_processor is None:
-            print("[TTS] Warning: no TX processor registered — cannot transmit")
+        if _radio_controller is None:
+            print("[TTS] Warning: no radio controller registered — cannot transmit")
         else:
             with _tx_lock:
-                _tx_processor.transmit(audio)
+                _radio_controller.transmit(audio)
 
     if TTS_OUTPUT in ("speakers", "both"):
         audio_queue.put(audio)

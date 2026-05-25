@@ -4,6 +4,7 @@ RX processing loop for Warden.
 Handles the receive pipeline: SDR -> demod -> audio -> transcription.
 """
 
+import threading
 import numpy as np
 from config import SQUELCH_THRESHOLD
 from radio.sdr import SDRDevice
@@ -16,6 +17,7 @@ class RXProcessor:
     Receive processor that handles the full RX pipeline.
     
     Manages squelch, audio buffering, and transcription triggering.
+    Supports pause/resume for half-duplex TX operation.
     """
     
     def __init__(self, sdr: SDRDevice):
@@ -23,6 +25,9 @@ class RXProcessor:
         self._demod = FMDemodulator()
         self._audio_buffer = []
         self._running = False
+        self._paused = False
+        self._pause_event = threading.Event()
+        self._pause_event.set()  # Start unpaused
     
     def start(self):
         """Start the RX processing loop."""
@@ -31,16 +36,43 @@ class RXProcessor:
         print(f"[RX] Started, squelch threshold={SQUELCH_THRESHOLD}")
         
         while self._running:
+            # Wait if paused (for TX)
+            self._pause_event.wait()
+            
+            if not self._running:
+                break
+                
             iq = self._sdr.read_rx()
-            if iq is not None:
+            if iq is not None and not self._paused:
                 self._process_block(iq)
     
     def stop(self):
         """Stop the RX processing loop."""
         self._running = False
+        self._pause_event.set()  # Unblock if paused
         self._flush_buffer()
         self._sdr.stop_rx()
         print("[RX] Stopped")
+    
+    def pause(self):
+        """Pause RX processing (for TX)."""
+        if self._paused:
+            return
+        self._paused = True
+        self._pause_event.clear()
+        self._flush_buffer()
+        self._sdr.stop_rx()
+        print("[RX] Paused for TX")
+    
+    def resume(self):
+        """Resume RX processing after TX."""
+        if not self._paused:
+            return
+        self._sdr.start_rx()
+        self._demod.reset()
+        self._paused = False
+        self._pause_event.set()
+        print("[RX] Resumed")
     
     def _process_block(self, iq: np.ndarray):
         """Process a block of IQ samples."""
