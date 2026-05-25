@@ -139,24 +139,29 @@ class SDRDevice:
         if self._tx_stream is None:
             return 0
         
+        import time
+        
         total_written = 0
-        timeout_us = 500000  # 500ms timeout per write attempt
+        max_chunk = 65536
+        retries = 0
         
         while total_written < len(iq):
-            remaining = iq[total_written:]
+            end = min(total_written + max_chunk, len(iq))
+            chunk = iq[total_written:end]
+            
             sr = self._device.writeStream(
-                self._tx_stream, [remaining], len(remaining), timeoutUs=timeout_us
+                self._tx_stream, [chunk], len(chunk), timeoutUs=1000000
             )
+            
             if sr.ret > 0:
                 total_written += sr.ret
-            elif sr.ret == 0:
-                # Buffer full, wait briefly for hardware to drain
-                import time
-                time.sleep(0.005)
+                retries = 0
             else:
-                # Error
-                print(f"[SDR] writeStream error: {sr.ret}")
-                break
+                retries += 1
+                if retries > 200:
+                    print(f"[SDR] write_tx stuck: {total_written}/{len(iq)} samples, ret={sr.ret}")
+                    break
+                time.sleep(0.01)
         
         return total_written
     

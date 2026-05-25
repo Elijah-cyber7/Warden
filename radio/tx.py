@@ -67,10 +67,15 @@ class TXProcessor:
     def _transmit_audio(self, audio: np.ndarray):
         """Transmit voice audio with CTCSS."""
         iq = self._modulator.modulate(audio, with_ctcss=True)
+        expected_duration = len(iq) / SAMPLE_RATE
+        print(f"[TX] Modulated: {len(iq)} IQ samples = {expected_duration:.2f}s at {int(SAMPLE_RATE)} SPS")
         self._write_chunks(iq)
     
     def _write_chunks(self, iq: np.ndarray):
         """Write IQ data in small chunks. SDR write_tx blocks until accepted."""
+        total = 0
         for i in range(0, len(iq), TX_CHUNK_SAMPLES):
             chunk = iq[i:i + TX_CHUNK_SAMPLES]
-            self._sdr.write_tx(chunk)
+            written = self._sdr.write_tx(chunk)
+            total += written
+        print(f"[TX] Wrote {total}/{len(iq)} IQ samples")
