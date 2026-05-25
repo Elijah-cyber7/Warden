@@ -38,7 +38,7 @@ class SDRDevice:
             log.error("No devices found — check USB connection")
             return False
 
-        log.info("Found device: %s", results[0].get("label", results[0]))
+        log.info("Found device: %s", dict(results[0]))
         self._device = SoapySDR.Device(results[0])
 
         self._device.setSampleRate(SoapySDR.SOAPY_SDR_RX, 0, SAMPLE_RATE)
