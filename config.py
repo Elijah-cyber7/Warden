@@ -36,16 +36,16 @@ RX_AMP_ENABLE = False       # External 14dB amp - usually not needed
 # VGA: 0-47 dB (TX IF gain)
 # AMP: 0 or 14 dB (TX RF amp enable)
 # -----------------------------------------------------------------------------
-TX_VGA_GAIN = 30            # TX IF gain
+TX_VGA_GAIN = 30          # TX IF gain
 TX_AMP_ENABLE = False        # TX RF amp - BE CAREFUL with power levels
-TX_SETTLE_SEC = 0.1         # Pause after start_tx before first IQ write
+TX_SETTLE_SEC = 0.3         # Pause after start_tx before first IQ write
 
 # -----------------------------------------------------------------------------
 # CTCSS (Continuous Tone-Coded Squelch System)
 # Required for walkie-talkies to open their squelch
 # -----------------------------------------------------------------------------
 CTCSS_FREQ = 127.3          # CTCSS tone frequency (Hz) - must match radio
-CTCSS_LEVEL = 0.03      # CTCSS tone amplitude (0.0-1.0, typically 0.1-0.2)
+CTCSS_LEVEL = 0.03   # CTCSS tone amplitude (0.0-1.0, typically 0.1-0.2)
 
 # -----------------------------------------------------------------------------
 # FM Modulation/Demodulation
@@ -58,6 +58,7 @@ DECIMATION = 13             # Decimation factor for RX processing
 # -----------------------------------------------------------------------------
 AUDIO_RATE = 48000          # Audio sample rate (Hz)
 AUDIO_OUTPUT_GAIN = 25.0    # Output gain multiplier for speaker
+TX_VOICE_GAIN = 1.5         # Voice gain before TX modulation
 
 # -----------------------------------------------------------------------------
 # Filters
@@ -89,7 +90,7 @@ NO_SPEECH_THRESHOLD = 0.6   # Reject if no_speech_prob exceeds this
 # Dispatch
 # -----------------------------------------------------------------------------
 CALLSIGNS = ["Alpha X-Ray 3-1", "Bravo 7", "dispatch"]  # Preamble trigger words
-WHISPER_INITIAL_PROMPT = ", ".join(CALLSIGNS) + ". Two-way radio dispatch."
+WHISPER_INITIAL_PROMPT = ", ".join(CALLSIGNS) 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
@@ -98,5 +99,5 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 # Download voice: python3 -m piper.download_voices en_US-lessac-medium --download-dir voices
 # -----------------------------------------------------------------------------
 PIPER_VOICES_DIR = Path(__file__).parent / "voices"
-PIPER_VOICE = os.getenv("PIPER_VOICE", "en_US-lessac-medium")
-TTS_OUTPUT = os.getenv("TTS_OUTPUT", "speakers")  # transmit | speakers | both
+PIPER_VOICE = os.getenv("PIPER_VOICE", "en_US-amy-medium")
+TTS_OUTPUT = os.getenv("TTS_OUTPUT", "transmit")  # transmit | speakers | both

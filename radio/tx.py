@@ -8,7 +8,7 @@ CTCSS tone is integrated in the modulator (post-pre-emphasis).
 import time
 
 import numpy as np
-from config import AUDIO_RATE, SAMPLE_RATE, TX_SETTLE_SEC
+from config import AUDIO_RATE, SAMPLE_RATE, TX_SETTLE_SEC, TX_VOICE_GAIN
 from radio.sdr import SDRDevice
 from radio.modulator import FMModulator
 
@@ -47,7 +47,8 @@ class TXProcessor:
         segments = []
         if lead_in > 0:
             segments.append(np.zeros(int(AUDIO_RATE * lead_in), dtype=np.float32))
-        segments.append(audio.astype(np.float32))
+        voice_audio = self._apply_voice_gain(audio)
+        segments.append(voice_audio)
         if lead_out > 0:
             segments.append(np.zeros(int(AUDIO_RATE * lead_out), dtype=np.float32))
         
@@ -90,6 +91,10 @@ class TXProcessor:
                 time.sleep(sleep_time)
 
         print(f"[TX] Wrote {total_written}/{len(iq)} IQ samples")
+
+    def _apply_voice_gain(self, audio: np.ndarray) -> np.ndarray:
+        """Boost voice before modulation without changing CTCSS-only segments."""
+        return np.clip(audio.astype(np.float32) * TX_VOICE_GAIN, -1.0, 1.0)
 
     def _apply_ramp_down(self, iq: np.ndarray) -> np.ndarray:
         """Softly reduce RF amplitude before stopping TX to avoid squelch pops."""
