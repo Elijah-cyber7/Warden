@@ -8,7 +8,7 @@ import logging
 import threading
 
 import numpy as np
-from config import SQUELCH_THRESHOLD, AUDIO_RATE, MIN_AUDIO_DURATION
+from config import SQUELCH_THRESHOLD
 from radio.sdr import SDRDevice
 from radio.demod import FMDemodulator
 from transcription.whisper_engine import transcribe_audio
@@ -89,17 +89,12 @@ class RXProcessor:
         self._audio_buffer.append(audio)
 
     def _flush_buffer(self):
-        """Flush audio buffer to transcription if long enough."""
+        """Flush audio buffer to transcription."""
         if not self._audio_buffer:
             return
 
         full_audio = np.concatenate(self._audio_buffer)
         self._audio_buffer = []
         self._demod.reset()
-
-        duration = len(full_audio) / AUDIO_RATE
-        if duration < MIN_AUDIO_DURATION:
-            log.debug("Discarding %.2fs audio (below minimum)", duration)
-            return
 
         transcribe_audio(full_audio)

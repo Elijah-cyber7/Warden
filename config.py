@@ -47,7 +47,7 @@ TX_VOICE_GAIN = 1.5         # Voice gain before TX modulation
 # Deviation = NBFM_DEVIATION * CTCSS_LEVEL; target 300-750 Hz.
 # -----------------------------------------------------------------------------
 CTCSS_FREQ = 127.3          # CTCSS tone frequency (Hz) — must match radio
-CTCSS_LEVEL = 0.15          # Tone amplitude relative to full deviation
+CTCSS_LEVEL = 0.03          # Tone amplitude relative to full deviation
 
 # -----------------------------------------------------------------------------
 # FM Modulation/Demodulation
@@ -85,7 +85,7 @@ NO_SPEECH_THRESHOLD = 0.6   # Reject if no_speech_prob exceeds this
 # Dispatch
 # -----------------------------------------------------------------------------
 CALLSIGNS = ["Alpha X-Ray 3-1", "Bravo 7", "dispatch"]
-WHISPER_INITIAL_PROMPT = ", ".join(CALLSIGNS) + ". Two-way radio dispatch."
+WHISPER_INITIAL_PROMPT = ", ".join(CALLSIGNS)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 

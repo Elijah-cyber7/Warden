@@ -9,8 +9,7 @@ import numpy as np
 from scipy.signal import firwin, lfilter, lfilter_zi, resample_poly
 from config import (
     SAMPLE_RATE, AUDIO_RATE, NBFM_DEVIATION, DECIMATION,
-    CTCSS_FREQ, CTCSS_LEVEL, VOICE_HP_CUTOFF, VOICE_LP_CUTOFF,
-    TX_VOICE_GAIN
+    CTCSS_FREQ, CTCSS_LEVEL, VOICE_HP_CUTOFF, VOICE_LP_CUTOFF
 )
 from audio.filters import PreemphasisFilter
 
@@ -68,9 +67,6 @@ class FMModulator:
         audio, self._voice_lp_zi = lfilter(self._voice_lp_taps, 1.0, audio, zi=self._voice_lp_zi)
 
         audio = self._preemphasis.process(audio)
-
-        # Apply voice gain before mixing with CTCSS
-        audio = audio * TX_VOICE_GAIN
 
         if self._ctcss_enabled and with_ctcss:
             audio = self._scale_voice_for_ctcss(audio)
