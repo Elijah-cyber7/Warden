@@ -34,43 +34,39 @@ class TXProcessor:
         """
         Transmit audio with CTCSS tone.
         
+        Builds the entire audio as one continuous block before modulating
+        to avoid resample_poly boundary artifacts that break CTCSS continuity.
+        
         Args:
             audio: Float32 audio samples at AUDIO_RATE.
             lead_in: Seconds of CTCSS-only carrier before voice.
             lead_out: Seconds of CTCSS-only carrier after voice.
         """
-        print(f"[TX] Transmitting {len(audio)/AUDIO_RATE:.2f}s of audio")
+        # Build one continuous audio block: [silence | voice | silence]
+        segments = []
+        if lead_in > 0:
+            segments.append(np.zeros(int(AUDIO_RATE * lead_in), dtype=np.float32))
+        segments.append(audio.astype(np.float32))
+        if lead_out > 0:
+            segments.append(np.zeros(int(AUDIO_RATE * lead_out), dtype=np.float32))
+        
+        full_audio = np.concatenate(segments)
+        total_duration = len(full_audio) / AUDIO_RATE
+        print(f"[TX] Transmitting {total_duration:.2f}s ({lead_in:.1f}s lead-in + {len(audio)/AUDIO_RATE:.2f}s voice + {lead_out:.1f}s lead-out)")
+        
+        # Single modulate call = no boundary artifacts
+        iq = self._modulator.modulate(full_audio, with_ctcss=True)
+        print(f"[TX] Modulated: {len(iq)} IQ samples = {len(iq)/SAMPLE_RATE:.2f}s at {int(SAMPLE_RATE)} SPS")
         
         self._sdr.start_tx()
         time.sleep(TX_SETTLE_SEC)
         
         try:
-            if lead_in > 0:
-                self._transmit_tone_only(lead_in)
-            
-            self._transmit_audio(audio)
-            
-            if lead_out > 0:
-                self._transmit_tone_only(lead_out)
-                
+            self._write_paced(iq)
         finally:
             self._sdr.stop_tx()
             self._modulator.reset()
             print("[TX] Transmission complete")
-    
-    def _transmit_tone_only(self, duration: float):
-        """Transmit CTCSS tone only (no voice) for lead-in/out."""
-        num_samples = int(AUDIO_RATE * duration)
-        silence = np.zeros(num_samples, dtype=np.float32)
-        iq = self._modulator.modulate(silence, with_ctcss=True)
-        self._write_paced(iq)
-    
-    def _transmit_audio(self, audio: np.ndarray):
-        """Transmit voice audio with CTCSS, paced to real-time."""
-        iq = self._modulator.modulate(audio, with_ctcss=True)
-        expected_duration = len(iq) / SAMPLE_RATE
-        print(f"[TX] Modulated: {len(iq)} IQ samples = {expected_duration:.2f}s at {int(SAMPLE_RATE)} SPS")
-        self._write_paced(iq)
     
     def _write_paced(self, iq: np.ndarray):
         """Write IQ data to SDR paced to real-time to prevent buffer overflow."""
