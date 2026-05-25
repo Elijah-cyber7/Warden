@@ -13,8 +13,9 @@ from radio.sdr import SDRDevice
 from radio.modulator import FMModulator
 
 
-# Small chunk size forces blocking backpressure from SDR hardware
-TX_CHUNK_SAMPLES = int(SAMPLE_RATE * 0.02)  # 20ms chunks
+# Write in 50ms chunks, paced to real-time
+TX_CHUNK_DURATION = 0.05
+TX_CHUNK_SAMPLES = int(SAMPLE_RATE * TX_CHUNK_DURATION)
 
 
 class TXProcessor:
@@ -22,7 +23,7 @@ class TXProcessor:
     Transmit processor that handles the full TX pipeline.
     
     CTCSS is handled inside FMModulator to ensure proper signal chain.
-    Writes in small chunks so hardware backpressure paces the transmission.
+    Writes are paced to real-time to prevent buffer overflow.
     """
     
     def __init__(self, sdr: SDRDevice):
@@ -62,20 +63,32 @@ class TXProcessor:
         num_samples = int(AUDIO_RATE * duration)
         silence = np.zeros(num_samples, dtype=np.float32)
         iq = self._modulator.modulate(silence, with_ctcss=True)
-        self._write_chunks(iq)
+        self._write_paced(iq)
     
     def _transmit_audio(self, audio: np.ndarray):
-        """Transmit voice audio with CTCSS."""
+        """Transmit voice audio with CTCSS, paced to real-time."""
         iq = self._modulator.modulate(audio, with_ctcss=True)
         expected_duration = len(iq) / SAMPLE_RATE
         print(f"[TX] Modulated: {len(iq)} IQ samples = {expected_duration:.2f}s at {int(SAMPLE_RATE)} SPS")
-        self._write_chunks(iq)
+        self._write_paced(iq)
     
-    def _write_chunks(self, iq: np.ndarray):
-        """Write IQ data in small chunks. SDR write_tx blocks until accepted."""
-        total = 0
+    def _write_paced(self, iq: np.ndarray):
+        """Write IQ data to SDR paced to real-time to prevent buffer overflow."""
+        start_time = time.monotonic()
+        samples_written = 0
+        total_written = 0
+
         for i in range(0, len(iq), TX_CHUNK_SAMPLES):
             chunk = iq[i:i + TX_CHUNK_SAMPLES]
             written = self._sdr.write_tx(chunk)
-            total += written
-        print(f"[TX] Wrote {total}/{len(iq)} IQ samples")
+            samples_written += len(chunk)
+            total_written += written
+
+            # Pace to real-time: sleep until the SDR should have consumed what we've written
+            elapsed = time.monotonic() - start_time
+            expected_elapsed = samples_written / SAMPLE_RATE
+            sleep_time = expected_elapsed - elapsed - 0.01  # 10ms headroom
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+
+        print(f"[TX] Wrote {total_written}/{len(iq)} IQ samples")

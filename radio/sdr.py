@@ -128,13 +128,13 @@ class SDRDevice:
     
     def write_tx(self, iq: np.ndarray) -> int:
         """
-        Write IQ samples to TX stream. Blocks until all samples are accepted.
+        Write IQ samples to TX stream.
         
         Args:
             iq: Complex64 array of IQ samples to transmit.
             
         Returns:
-            Total number of samples written.
+            Number of samples written.
         """
         if self._tx_stream is None:
             return 0
