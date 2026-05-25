@@ -6,11 +6,10 @@ between preamble-matched and unmatched entries.
 """
 
 from datetime import datetime
-from html import escape
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLabel
-from PySide6.QtGui import QFont, QTextCursor
+from PySide6.QtGui import QFont, QTextCursor, QColor
 
 
 class TranscriptPanel(QWidget):
@@ -53,10 +52,14 @@ class TranscriptPanel(QWidget):
             color = "#888888"
             prefix = "   "
 
-        html = f'<span style="color:{color}">{timestamp} {prefix} {escape(text)}</span><br>'
+        safe_text = text.replace("\n", " ").strip()
+        line = f"{timestamp} {prefix} {safe_text}"
 
         self._log.moveCursor(QTextCursor.MoveOperation.End)
-        self._log.insertHtml(html)
+        fmt = self._log.currentCharFormat()
+        fmt.setForeground(QColor(color))
+        self._log.setCurrentCharFormat(fmt)
+        self._log.insertPlainText(line + "\n")
         self._log.moveCursor(QTextCursor.MoveOperation.End)
 
         self._entry_count += 1
