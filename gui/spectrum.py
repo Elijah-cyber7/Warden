@@ -7,7 +7,7 @@ Displays frequency vs. power as a live-updating line graph using pyqtgraph.
 import numpy as np
 import pyqtgraph as pg
 from PySide6.QtWidgets import QWidget, QVBoxLayout
-from config import SAMPLE_RATE, CENTER_FREQ
+from config import SAMPLE_RATE
 
 
 class SpectrumWidget(QWidget):
@@ -19,7 +19,7 @@ class SpectrumWidget(QWidget):
         super().__init__(parent)
 
         self._plot_widget = pg.PlotWidget()
-        self._plot_widget.setLabel("bottom", "Frequency", units="MHz")
+        self._plot_widget.setLabel("bottom", "Sample bandwidth", units="kHz")
         self._plot_widget.setLabel("left", "Power", units="dB")
         self._plot_widget.setTitle("Spectrum")
         self._plot_widget.showGrid(x=True, y=True, alpha=0.3)
@@ -28,8 +28,8 @@ class SpectrumWidget(QWidget):
         self._curve = self._plot_widget.plot(pen=pg.mkPen("c", width=1))
 
         freq_axis = np.linspace(
-            (CENTER_FREQ - SAMPLE_RATE / 2) / 1e6,
-            (CENTER_FREQ + SAMPLE_RATE / 2) / 1e6,
+            0.0,
+            SAMPLE_RATE / 1e3,
             self.FFT_SIZE
         )
         self._freq_axis = freq_axis

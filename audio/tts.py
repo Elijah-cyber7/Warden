@@ -22,6 +22,7 @@ log = logging.getLogger("warden.tts")
 
 _voice: PiperVoice | None = None
 _radio_controller = None
+_bridge = None
 _tx_lock = threading.Lock()
 
 
@@ -29,6 +30,12 @@ def set_radio_controller(controller):
     """Register the radio controller (called once from main.py)."""
     global _radio_controller
     _radio_controller = controller
+
+
+def set_bridge(bridge):
+    """Register the GUI bridge for outgoing TTS notifications."""
+    global _bridge
+    _bridge = bridge
 
 
 def _get_voice() -> PiperVoice:
@@ -68,6 +75,9 @@ def synthesize_speech(text: str) -> np.ndarray:
 def speak(text: str):
     """Synthesize speech and route to radio TX and/or laptop speakers."""
     log.info("Speaking: %s", text)
+    if _bridge:
+        _bridge.emit_transcription(f"Warden: {text}", True)
+
     audio = synthesize_speech(text)
 
     if TTS_OUTPUT in ("transmit", "both"):

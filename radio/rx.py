@@ -82,7 +82,7 @@ class RXProcessor:
     def _process_block(self, iq: np.ndarray):
         """Process a block of IQ samples through squelch and demod."""
         iq_power = np.mean(np.abs(iq) ** 2)
-        squelch_open = iq_power >= SQUELCH_THRESHOLD
+        squelch_open = bool(iq_power >= SQUELCH_THRESHOLD)
 
         if self._bridge:
             self._bridge.emit_iq(iq)

@@ -1,22 +1,19 @@
 """
-Scrolling transcription log panel.
+Scrolling application log panel.
 
-Shows timestamped transcription results with visual distinction
-between preamble-matched and unmatched entries.
+Shows backend log messages inside the GUI without requiring the terminal.
 """
 
-from datetime import datetime
 from html import escape
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLabel
 from PySide6.QtGui import QFont, QTextCursor
 
 
-class TranscriptPanel(QWidget):
-    """Scrolling log of transcription results."""
+class LogPanel(QWidget):
+    """Scrolling log of application events."""
 
-    MAX_ENTRIES = 200
+    MAX_ENTRIES = 300
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -24,14 +21,14 @@ class TranscriptPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
 
-        header = QLabel("Radio Log")
+        header = QLabel("Logs")
         header.setFont(QFont("Menlo", 11, QFont.Weight.Bold))
         header.setStyleSheet("color: #cccccc;")
         layout.addWidget(header)
 
         self._log = QTextEdit()
         self._log.setReadOnly(True)
-        self._log.setFont(QFont("Menlo", 10))
+        self._log.setFont(QFont("Menlo", 9))
         self._log.setStyleSheet(
             "QTextEdit { background-color: #1e1e1e; color: #cccccc; border: none; }"
         )
@@ -39,22 +36,9 @@ class TranscriptPanel(QWidget):
 
         self._entry_count = 0
 
-    def add_entry(self, text: str, matched: bool):
-        """Add a timestamped transcription entry."""
-        timestamp = datetime.now().strftime("%H:%M:%S")
-
-        if text.startswith("Warden:"):
-            color = "#66ccff"
-            prefix = "<<<"
-        elif matched:
-            color = "#00ff88"
-            prefix = ">>>"
-        else:
-            color = "#888888"
-            prefix = "   "
-
-        html = f'<span style="color:{color}">{timestamp} {prefix} {escape(text)}</span><br>'
-
+    def add_log(self, text: str):
+        """Add a formatted log message."""
+        html = f'<span style="color:#bbbbbb">{escape(text)}</span><br>'
         self._log.moveCursor(QTextCursor.MoveOperation.End)
         self._log.insertHtml(html)
         self._log.moveCursor(QTextCursor.MoveOperation.End)
@@ -67,6 +51,6 @@ class TranscriptPanel(QWidget):
         """Remove oldest entries to keep memory bounded."""
         cursor = self._log.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.Start)
-        cursor.movePosition(QTextCursor.MoveOperation.Down, QTextCursor.MoveMode.KeepAnchor, 50)
+        cursor.movePosition(QTextCursor.MoveOperation.Down, QTextCursor.MoveMode.KeepAnchor, 75)
         cursor.removeSelectedText()
-        self._entry_count -= 50
+        self._entry_count -= 75

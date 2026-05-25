@@ -19,9 +19,23 @@ from config import OPENAI_API_KEY
 from audio.player import audio_worker, audio_queue
 from radio.sdr import SDRDevice
 from radio.controller import RadioController
-from audio.tts import set_radio_controller
+from audio.tts import set_bridge as set_tts_bridge, set_radio_controller
 
 log = logging.getLogger("warden")
+
+
+class GuiLogHandler(logging.Handler):
+    """Forward Python log records into the Qt GUI bridge."""
+
+    def __init__(self, bridge):
+        super().__init__()
+        self._bridge = bridge
+
+    def emit(self, record):
+        try:
+            self._bridge.emit_log(self.format(record))
+        except Exception:
+            self.handleError(record)
 
 
 def run_headless(sdr: SDRDevice):
@@ -48,6 +62,15 @@ def run_gui(sdr: SDRDevice):
 
     bridge = StateBridge()
     set_bridge(bridge)
+    set_tts_bridge(bridge)
+
+    gui_log_handler = GuiLogHandler(bridge)
+    gui_log_handler.setLevel(logging.INFO)
+    gui_log_handler.setFormatter(logging.Formatter(
+        "%(asctime)s [%(name)s] %(message)s",
+        datefmt="%H:%M:%S",
+    ))
+    logging.getLogger().addHandler(gui_log_handler)
 
     radio = RadioController(sdr, bridge=bridge)
     set_radio_controller(radio)

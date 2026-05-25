@@ -14,9 +14,9 @@ from PySide6.QtGui import QPalette, QColor
 
 from gui.bridge import StateBridge
 from gui.spectrum import SpectrumWidget
-from gui.waterfall import WaterfallWidget
 from gui.status_bar import StatusBar
 from gui.transcript_panel import TranscriptPanel
+from gui.log_panel import LogPanel
 from gui.config_panel import ConfigPanel
 
 log = logging.getLogger("warden.gui")
@@ -46,31 +46,31 @@ class WardenWindow(QMainWindow):
         # Main vertical splitter: spectrum area / bottom panels
         main_splitter = QSplitter(Qt.Orientation.Vertical)
 
-        # Top: spectrum + waterfall stacked
+        # Top: spectrum display
         spectrum_container = QWidget()
         spectrum_layout = QVBoxLayout(spectrum_container)
         spectrum_layout.setContentsMargins(0, 0, 0, 0)
         spectrum_layout.setSpacing(2)
 
         self._spectrum = SpectrumWidget()
-        self._waterfall = WaterfallWidget()
-        spectrum_layout.addWidget(self._spectrum, stretch=2)
-        spectrum_layout.addWidget(self._waterfall, stretch=3)
+        spectrum_layout.addWidget(self._spectrum)
 
         main_splitter.addWidget(spectrum_container)
 
-        # Bottom: transcript log + config panel side by side
+        # Bottom: radio log + app logs + config panel side by side
         bottom_splitter = QSplitter(Qt.Orientation.Horizontal)
 
         self._transcript = TranscriptPanel()
+        self._logs = LogPanel()
         self._config_panel = ConfigPanel(sdr=sdr)
 
         bottom_splitter.addWidget(self._transcript)
+        bottom_splitter.addWidget(self._logs)
         bottom_splitter.addWidget(self._config_panel)
-        bottom_splitter.setSizes([600, 300])
+        bottom_splitter.setSizes([360, 360, 280])
 
         main_splitter.addWidget(bottom_splitter)
-        main_splitter.setSizes([450, 250])
+        main_splitter.setSizes([560, 150])
 
         root_layout.addWidget(main_splitter)
 
@@ -79,11 +79,11 @@ class WardenWindow(QMainWindow):
         self._bridge.squelch_changed.connect(self._status_bar.set_squelch)
         self._bridge.tx_state_changed.connect(self._status_bar.set_mode)
         self._bridge.transcription_ready.connect(self._transcript.add_entry)
+        self._bridge.log_ready.connect(self._logs.add_log)
 
     def _on_iq(self, iq):
-        """Route IQ data to both spectrum and waterfall."""
+        """Route IQ data to the spectrum display."""
         self._spectrum.update_spectrum(iq)
-        self._waterfall.update_waterfall(iq)
 
     def _apply_dark_theme(self):
         """Apply a dark color palette to the application."""

@@ -72,4 +72,11 @@ def dispatch(text: str):
         return
 
     log.info("Dispatching: '%s'", message)
-    chat_async(message)
+    chat_async(message, on_reply=_handle_reply)
+
+
+def _handle_reply(reply: str):
+    """Display and transmit a dispatch response."""
+    log.info("Response: %s", reply)
+    from audio.tts import speak
+    speak(reply)

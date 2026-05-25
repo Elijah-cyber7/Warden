@@ -20,6 +20,7 @@ class StateBridge(QObject):
     squelch_changed = Signal(bool, float)
     tx_state_changed = Signal(bool)
     transcription_ready = Signal(str, bool)
+    log_ready = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -39,3 +40,7 @@ class StateBridge(QObject):
     def emit_transcription(self, text: str, matched: bool):
         """Called from whisper thread with transcription results."""
         self.transcription_ready.emit(text, matched)
+
+    def emit_log(self, text: str):
+        """Called when a log record should be shown in the GUI."""
+        self.log_ready.emit(text)
