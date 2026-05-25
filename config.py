@@ -45,7 +45,7 @@ TX_SETTLE_SEC = 0.1         # Pause after start_tx before first IQ write
 # Required for walkie-talkies to open their squelch
 # -----------------------------------------------------------------------------
 CTCSS_FREQ = 127.3          # CTCSS tone frequency (Hz) - must match radio
-CTCSS_LEVEL = 0.01       # CTCSS tone amplitude (0.0-1.0, typically 0.1-0.2)
+CTCSS_LEVEL = 0.03      # CTCSS tone amplitude (0.0-1.0, typically 0.1-0.2)
 
 # -----------------------------------------------------------------------------
 # FM Modulation/Demodulation

@@ -35,7 +35,7 @@ class RadioController:
     def tx(self) -> TXProcessor:
         return self._tx
     
-    def transmit(self, audio: np.ndarray, lead_in: float = 0.1, lead_out: float = 0.1):
+    def transmit(self, audio: np.ndarray, lead_in: float = 0.1, lead_out: float = 0.5):
         """
         Transmit audio, pausing RX for the duration.
         

@@ -16,6 +16,7 @@ from radio.modulator import FMModulator
 # Write in 50ms chunks, paced to real-time
 TX_CHUNK_DURATION = 0.05
 TX_CHUNK_SAMPLES = int(SAMPLE_RATE * TX_CHUNK_DURATION)
+TX_RAMP_DOWN_SEC = 0.02
 
 
 class TXProcessor:
@@ -30,7 +31,7 @@ class TXProcessor:
         self._sdr = sdr
         self._modulator = FMModulator(ctcss_enabled=True)
     
-    def transmit(self, audio: np.ndarray, lead_in: float = 0.2, lead_out: float = 0.2):
+    def transmit(self, audio: np.ndarray, lead_in: float = 0.2, lead_out: float = 0.5):
         """
         Transmit audio with CTCSS tone.
         
@@ -56,6 +57,7 @@ class TXProcessor:
         
         # Single modulate call = no boundary artifacts
         iq = self._modulator.modulate(full_audio, with_ctcss=True)
+        iq = self._apply_ramp_down(iq)
         print(f"[TX] Modulated: {len(iq)} IQ samples = {len(iq)/SAMPLE_RATE:.2f}s at {int(SAMPLE_RATE)} SPS")
         
         self._sdr.start_tx()
@@ -88,3 +90,14 @@ class TXProcessor:
                 time.sleep(sleep_time)
 
         print(f"[TX] Wrote {total_written}/{len(iq)} IQ samples")
+
+    def _apply_ramp_down(self, iq: np.ndarray) -> np.ndarray:
+        """Softly reduce RF amplitude before stopping TX to avoid squelch pops."""
+        ramp_samples = min(len(iq), int(SAMPLE_RATE * TX_RAMP_DOWN_SEC))
+        if ramp_samples <= 1:
+            return iq
+
+        iq = iq.copy()
+        ramp = np.linspace(1.0, 0.0, ramp_samples, dtype=np.float32)
+        iq[-ramp_samples:] *= ramp
+        return iq
