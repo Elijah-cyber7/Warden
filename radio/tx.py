@@ -13,65 +13,76 @@ from radio.sdr import SDRDevice
 from radio.modulator import FMModulator
 
 
+# Write in 50ms chunks, paced to real-time
+TX_CHUNK_DURATION = 0.05
+TX_CHUNK_SAMPLES = int(SAMPLE_RATE * TX_CHUNK_DURATION)
+
+
 class TXProcessor:
     """
     Transmit processor that handles the full TX pipeline.
     
     CTCSS is handled inside FMModulator to ensure proper signal chain.
+    Writes are paced to real-time to prevent buffer overflow.
     """
     
     def __init__(self, sdr: SDRDevice):
         self._sdr = sdr
         self._modulator = FMModulator(ctcss_enabled=True)
     
-    def transmit(self, audio: np.ndarray, lead_in: float = 0.1, lead_out: float = 0.1):
+    def transmit(self, audio: np.ndarray, lead_in: float = 0.2, lead_out: float = 0.2):
         """
         Transmit audio with CTCSS tone.
         
         Args:
             audio: Float32 audio samples at AUDIO_RATE.
-            lead_in: Seconds of CTCSS-only carrier before voice (default 100ms).
-            lead_out: Seconds of CTCSS-only carrier after voice (default 100ms).
+            lead_in: Seconds of CTCSS-only carrier before voice.
+            lead_out: Seconds of CTCSS-only carrier after voice.
         """
         print(f"[TX] Transmitting {len(audio)/AUDIO_RATE:.2f}s of audio")
         
         self._sdr.start_tx()
         time.sleep(TX_SETTLE_SEC)
         
-        total_iq = 0
         try:
             if lead_in > 0:
-                total_iq += self._transmit_tone_only(lead_in)
+                self._transmit_tone_only(lead_in)
             
-            total_iq += self._transmit_audio(audio)
+            self._transmit_audio(audio)
             
             if lead_out > 0:
-                total_iq += self._transmit_tone_only(lead_out)
-            
-            drain_sec = total_iq / SAMPLE_RATE
-            print(f"[TX] Draining {drain_sec:.2f}s on air...")
-            time.sleep(drain_sec)
+                self._transmit_tone_only(lead_out)
                 
         finally:
             self._sdr.stop_tx()
             self._modulator.reset()
             print("[TX] Transmission complete")
     
-    def _transmit_tone_only(self, duration: float) -> int:
-        """Transmit CTCSS tone only (no voice) for lead-in/out. Returns IQ sample count."""
+    def _transmit_tone_only(self, duration: float):
+        """Transmit CTCSS tone only (no voice) for lead-in/out."""
         num_samples = int(AUDIO_RATE * duration)
         silence = np.zeros(num_samples, dtype=np.float32)
         iq = self._modulator.modulate(silence, with_ctcss=True)
-        self._sdr.write_tx(iq)
-        return len(iq)
+        self._write_paced(iq)
     
-    def _transmit_audio(self, audio: np.ndarray) -> int:
-        """Transmit voice audio with CTCSS. Returns IQ sample count."""
+    def _transmit_audio(self, audio: np.ndarray):
+        """Transmit voice audio with CTCSS, paced to real-time."""
         iq = self._modulator.modulate(audio, with_ctcss=True)
+        self._write_paced(iq)
+    
+    def _write_paced(self, iq: np.ndarray):
+        """Write IQ data to SDR paced to real-time to prevent buffer overflow."""
+        start_time = time.monotonic()
+        samples_written = 0
         
-        chunk_size = int(SAMPLE_RATE * 0.1)
-        for i in range(0, len(iq), chunk_size):
-            chunk = iq[i:i + chunk_size]
+        for i in range(0, len(iq), TX_CHUNK_SAMPLES):
+            chunk = iq[i:i + TX_CHUNK_SAMPLES]
             self._sdr.write_tx(chunk)
-        
-        return len(iq)
+            samples_written += len(chunk)
+            
+            # Pace to real-time: sleep until the SDR should have consumed what we've written
+            elapsed = time.monotonic() - start_time
+            expected_elapsed = samples_written / SAMPLE_RATE
+            sleep_time = expected_elapsed - elapsed - 0.01  # 10ms headroom
+            if sleep_time > 0:
+                time.sleep(sleep_time)
