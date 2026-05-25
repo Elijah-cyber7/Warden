@@ -23,9 +23,10 @@ class RadioController:
     Ensures RX is paused while transmitting and resumed after.
     """
 
-    def __init__(self, sdr: SDRDevice):
+    def __init__(self, sdr: SDRDevice, bridge=None):
         self._sdr = sdr
-        self._rx = RXProcessor(sdr)
+        self._bridge = bridge
+        self._rx = RXProcessor(sdr, bridge=bridge)
         self._tx = TXProcessor(sdr)
         self._tx_lock = threading.Lock()
 
@@ -49,10 +50,14 @@ class RadioController:
         with self._tx_lock:
             log.info("Switching to TX")
             self._rx.pause()
+            if self._bridge:
+                self._bridge.emit_tx_state(True)
 
             try:
                 self._tx.transmit(audio, lead_in=lead_in, lead_out=lead_out)
             finally:
+                if self._bridge:
+                    self._bridge.emit_tx_state(False)
                 log.info("Switching to RX")
                 self._rx.resume()
 

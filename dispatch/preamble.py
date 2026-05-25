@@ -12,6 +12,14 @@ from dispatch.openai_client import chat_async
 
 log = logging.getLogger("warden.dispatch")
 
+_bridge = None
+
+
+def set_bridge(bridge):
+    """Register the GUI bridge for transcription notifications."""
+    global _bridge
+    _bridge = bridge
+
 _NUMBER_WORDS = {
     "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4",
     "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9",
@@ -34,7 +42,12 @@ def normalize_transcript(text: str) -> str:
 def check_preamble(text: str):
     """Check if transcript contains a callsign and dispatch if so."""
     normalized = normalize_transcript(text)
-    if _pattern.search(normalized):
+    matched = bool(_pattern.search(normalized))
+
+    if _bridge:
+        _bridge.emit_transcription(text, matched)
+
+    if matched:
         log.info("Preamble matched: '%s'", text)
         dispatch(normalized)
     else:

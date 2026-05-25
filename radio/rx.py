@@ -2,6 +2,7 @@
 RX processing loop for Warden.
 
 Handles the receive pipeline: SDR -> demod -> squelch -> transcription.
+Optionally emits IQ/squelch data to a GUI bridge.
 """
 
 import logging
@@ -24,8 +25,9 @@ class RXProcessor:
     Supports pause/resume for half-duplex TX operation.
     """
 
-    def __init__(self, sdr: SDRDevice):
+    def __init__(self, sdr: SDRDevice, bridge=None):
         self._sdr = sdr
+        self._bridge = bridge
         self._demod = FMDemodulator()
         self._audio_buffer: list[np.ndarray] = []
         self._running = False
@@ -80,8 +82,13 @@ class RXProcessor:
     def _process_block(self, iq: np.ndarray):
         """Process a block of IQ samples through squelch and demod."""
         iq_power = np.mean(np.abs(iq) ** 2)
+        squelch_open = iq_power >= SQUELCH_THRESHOLD
 
-        if iq_power < SQUELCH_THRESHOLD:
+        if self._bridge:
+            self._bridge.emit_iq(iq)
+            self._bridge.emit_squelch(squelch_open, float(iq_power))
+
+        if not squelch_open:
             self._flush_buffer()
             return
 
