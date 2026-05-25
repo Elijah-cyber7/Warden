@@ -128,19 +128,37 @@ class SDRDevice:
     
     def write_tx(self, iq: np.ndarray) -> int:
         """
-        Write IQ samples to TX stream.
+        Write IQ samples to TX stream. Blocks until all samples are accepted.
         
         Args:
             iq: Complex64 array of IQ samples to transmit.
             
         Returns:
-            Number of samples written.
+            Total number of samples written.
         """
         if self._tx_stream is None:
             return 0
         
-        sr = self._device.writeStream(self._tx_stream, [iq], len(iq))
-        return sr.ret if sr.ret > 0 else 0
+        total_written = 0
+        timeout_us = 500000  # 500ms timeout per write attempt
+        
+        while total_written < len(iq):
+            remaining = iq[total_written:]
+            sr = self._device.writeStream(
+                self._tx_stream, [remaining], len(remaining), timeoutUs=timeout_us
+            )
+            if sr.ret > 0:
+                total_written += sr.ret
+            elif sr.ret == 0:
+                # Buffer full, wait briefly for hardware to drain
+                import time
+                time.sleep(0.005)
+            else:
+                # Error
+                print(f"[SDR] writeStream error: {sr.ret}")
+                break
+        
+        return total_written
     
     def close(self):
         """Close device and all streams."""
