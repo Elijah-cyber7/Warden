@@ -37,7 +37,7 @@ RX_AMP_ENABLE = False       # External 14dB amp - usually not needed
 # AMP: 0 or 14 dB (TX RF amp enable)
 # -----------------------------------------------------------------------------
 TX_VGA_GAIN = 30            # TX IF gain
-TX_AMP_ENABLE = True        # TX RF amp - BE CAREFUL with power levels
+TX_AMP_ENABLE = False        # TX RF amp - BE CAREFUL with power levels
 TX_SETTLE_SEC = 0.1         # Pause after start_tx before first IQ write
 
 # -----------------------------------------------------------------------------
@@ -45,7 +45,7 @@ TX_SETTLE_SEC = 0.1         # Pause after start_tx before first IQ write
 # Required for walkie-talkies to open their squelch
 # -----------------------------------------------------------------------------
 CTCSS_FREQ = 127.3          # CTCSS tone frequency (Hz) - must match radio
-CTCSS_LEVEL = 0.3        # CTCSS tone amplitude (0.0-1.0, typically 0.1-0.2)
+CTCSS_LEVEL = 0.01       # CTCSS tone amplitude (0.0-1.0, typically 0.1-0.2)
 
 # -----------------------------------------------------------------------------
 # FM Modulation/Demodulation
