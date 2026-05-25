@@ -1,16 +1,20 @@
-
 venv/
 .env
+
 .idea/
+.vscode/
 
 # Python bytecode
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Debug artifacts
+# Debug/test artifacts
 debug.wav
+test_iq.wav
 
-# Piper voice models
+# Piper voice models (large binaries)
 voices/
+
+# macOS
 .DS_Store

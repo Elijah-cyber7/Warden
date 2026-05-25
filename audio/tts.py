@@ -1,4 +1,12 @@
+"""
+Text-to-Speech for Warden dispatch responses.
+
+Uses Piper TTS for local synthesis, then routes output to
+radio TX, laptop speakers, or both.
+"""
+
 import io
+import logging
 import threading
 import wave
 from pathlib import Path
@@ -10,7 +18,9 @@ from scipy.signal import resample_poly
 from config import AUDIO_RATE, PIPER_VOICE, PIPER_VOICES_DIR, TTS_OUTPUT
 from audio.player import audio_queue
 
-_voice = None
+log = logging.getLogger("warden.tts")
+
+_voice: PiperVoice | None = None
 _radio_controller = None
 _tx_lock = threading.Lock()
 
@@ -31,7 +41,7 @@ def _get_voice() -> PiperVoice:
                 f"Run: python3 -m piper.download_voices {PIPER_VOICE} --download-dir {PIPER_VOICES_DIR}"
             )
         _voice = PiperVoice.load(str(model_path))
-        print(f"[TTS] Loaded Piper voice: {PIPER_VOICE}")
+        log.info("Loaded voice: %s", PIPER_VOICE)
     return _voice
 
 
@@ -57,12 +67,12 @@ def synthesize_speech(text: str) -> np.ndarray:
 
 def speak(text: str):
     """Synthesize speech and route to radio TX and/or laptop speakers."""
-    print(f"[TTS] {text}")
+    log.info("Speaking: %s", text)
     audio = synthesize_speech(text)
 
     if TTS_OUTPUT in ("transmit", "both"):
         if _radio_controller is None:
-            print("[TTS] Warning: no radio controller registered — cannot transmit")
+            log.warning("No radio controller — cannot transmit")
         else:
             with _tx_lock:
                 _radio_controller.transmit(audio)

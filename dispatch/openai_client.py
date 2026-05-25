@@ -1,10 +1,19 @@
+"""
+OpenAI chat client for Warden dispatch.
+
+Provides synchronous and async wrappers around the ChatCompletion API.
+"""
+
+import logging
 import threading
 
 from openai import OpenAI
 
 from config import OPENAI_API_KEY, OPENAI_MODEL
 
-_client = None
+log = logging.getLogger("warden.openai")
+
+_client: OpenAI | None = None
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are Warden, a radio dispatch assistant. "
@@ -34,7 +43,8 @@ def chat(message: str, system_prompt: str = DEFAULT_SYSTEM_PROMPT) -> str:
     return response.choices[0].message.content.strip()
 
 
-def chat_async(message: str, on_reply=None, on_error=None, system_prompt: str = DEFAULT_SYSTEM_PROMPT):
+def chat_async(message: str, on_reply=None, on_error=None,
+               system_prompt: str = DEFAULT_SYSTEM_PROMPT):
     """Call OpenAI in a background thread so the RX loop is not blocked."""
     def _run():
         try:
@@ -42,13 +52,13 @@ def chat_async(message: str, on_reply=None, on_error=None, system_prompt: str = 
             if on_reply:
                 on_reply(reply)
             else:
-                print(f"\n[OPENAI] {reply}\n")
+                log.info("Reply: %s", reply)
                 from audio.tts import speak
                 speak(reply)
         except Exception as e:
             if on_error:
                 on_error(e)
             else:
-                print(f"[OPENAI] API error: {e}")
+                log.error("API error: %s", e)
 
     threading.Thread(target=_run, daemon=True).start()

@@ -18,7 +18,7 @@ BUFF_SIZE = 1024 * 256      # IQ buffer size (samples)
 # -----------------------------------------------------------------------------
 # Frequency
 # -----------------------------------------------------------------------------
-CENTER_FREQ = 462.61255e6   # Tune frequency (Hz) - FRS channel
+CENTER_FREQ = 462.61255e6   # Tune frequency (Hz) — FRS channel
 CHANNEL_BW = 12500          # NBFM channel bandwidth (Hz)
 
 # -----------------------------------------------------------------------------
@@ -27,30 +27,32 @@ CHANNEL_BW = 12500          # NBFM channel bandwidth (Hz)
 # VGA: 0-62 dB in 2 dB steps (IF/baseband amplifier)
 # AMP: 0 or 14 dB (external RF amp enable)
 # -----------------------------------------------------------------------------
-RX_LNA_GAIN = 24            # RF gain - moderate to avoid intermod
-RX_VGA_GAIN = 30            # Baseband gain - adjust for signal level
-RX_AMP_ENABLE = False       # External 14dB amp - usually not needed
+RX_LNA_GAIN = 24            # RF gain — moderate to avoid intermod
+RX_VGA_GAIN = 30            # Baseband gain — adjust for signal level
+RX_AMP_ENABLE = False       # External 14dB amp — usually not needed
 
 # -----------------------------------------------------------------------------
 # TX Gain (HackRF)
 # VGA: 0-47 dB (TX IF gain)
 # AMP: 0 or 14 dB (TX RF amp enable)
 # -----------------------------------------------------------------------------
-TX_VGA_GAIN = 30          # TX IF gain
-TX_AMP_ENABLE = False        # TX RF amp - BE CAREFUL with power levels
+TX_VGA_GAIN = 30            # TX IF gain
+TX_AMP_ENABLE = False       # TX RF amp — BE CAREFUL with power levels
 TX_SETTLE_SEC = 0.3         # Pause after start_tx before first IQ write
+TX_VOICE_GAIN = 1.5         # Voice gain before TX modulation
 
 # -----------------------------------------------------------------------------
 # CTCSS (Continuous Tone-Coded Squelch System)
-# Required for walkie-talkies to open their squelch
+# Required for walkie-talkies to open their squelch.
+# Deviation = NBFM_DEVIATION * CTCSS_LEVEL; target 300-750 Hz.
 # -----------------------------------------------------------------------------
-CTCSS_FREQ = 127.3          # CTCSS tone frequency (Hz) - must match radio
-CTCSS_LEVEL = 0.03   # CTCSS tone amplitude (0.0-1.0, typically 0.1-0.2)
+CTCSS_FREQ = 127.3          # CTCSS tone frequency (Hz) — must match radio
+CTCSS_LEVEL = 0.15          # Tone amplitude relative to full deviation
 
 # -----------------------------------------------------------------------------
 # FM Modulation/Demodulation
 # -----------------------------------------------------------------------------
-NBFM_DEVIATION = 2500       # NBFM frequency deviation (Hz) - standard ±2.5kHz
+NBFM_DEVIATION = 2500       # NBFM frequency deviation (Hz) — standard ±2.5kHz
 DECIMATION = 13             # Decimation factor for RX processing
 
 # -----------------------------------------------------------------------------
@@ -58,20 +60,13 @@ DECIMATION = 13             # Decimation factor for RX processing
 # -----------------------------------------------------------------------------
 AUDIO_RATE = 48000          # Audio sample rate (Hz)
 AUDIO_OUTPUT_GAIN = 25.0    # Output gain multiplier for speaker
-TX_VOICE_GAIN = 1.5         # Voice gain before TX modulation
 
 # -----------------------------------------------------------------------------
 # Filters
 # -----------------------------------------------------------------------------
-# Voice bandpass
-VOICE_HP_CUTOFF = 300       # Highpass cutoff (Hz) - remove sub-bass
-VOICE_LP_CUTOFF = 4000      # Lowpass cutoff (Hz) - voice bandwidth
-
-# De-emphasis (RX) / Pre-emphasis (TX)
-# 750µs is standard for land mobile radio (RDA1846 chip default)
-EMPHASIS_TAU = 750e-6       # Time constant (seconds)
-
-# Channel filter
+VOICE_HP_CUTOFF = 300       # Highpass cutoff (Hz) — remove sub-bass
+VOICE_LP_CUTOFF = 4000      # Lowpass cutoff (Hz) — voice bandwidth
+EMPHASIS_TAU = 750e-6       # De/pre-emphasis time constant (seconds)
 CHANNEL_FILTER_TAPS = 128   # Number of FIR taps for channel filter
 
 # -----------------------------------------------------------------------------
@@ -89,15 +84,39 @@ NO_SPEECH_THRESHOLD = 0.6   # Reject if no_speech_prob exceeds this
 # -----------------------------------------------------------------------------
 # Dispatch
 # -----------------------------------------------------------------------------
-CALLSIGNS = ["Alpha X-Ray 3-1", "Bravo 7", "dispatch"]  # Preamble trigger words
-WHISPER_INITIAL_PROMPT = ", ".join(CALLSIGNS) 
+CALLSIGNS = ["Alpha X-Ray 3-1", "Bravo 7", "dispatch"]
+WHISPER_INITIAL_PROMPT = ", ".join(CALLSIGNS) + ". Two-way radio dispatch."
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 # -----------------------------------------------------------------------------
 # TTS (Piper — local)
-# Download voice: python3 -m piper.download_voices en_US-lessac-medium --download-dir voices
+# Download voice: python3 -m piper.download_voices en_US-amy-medium --download-dir voices
 # -----------------------------------------------------------------------------
 PIPER_VOICES_DIR = Path(__file__).parent / "voices"
 PIPER_VOICE = os.getenv("PIPER_VOICE", "en_US-amy-medium")
 TTS_OUTPUT = os.getenv("TTS_OUTPUT", "transmit")  # transmit | speakers | both
+
+
+# =============================================================================
+# Validation — fail fast on bad config
+# =============================================================================
+def _validate():
+    errors = []
+    if not (400e6 <= CENTER_FREQ <= 6000e6):
+        errors.append(f"CENTER_FREQ={CENTER_FREQ/1e6:.1f}MHz — outside 400-6000 MHz range")
+    if not (0 <= RX_LNA_GAIN <= 40):
+        errors.append(f"RX_LNA_GAIN={RX_LNA_GAIN} — must be 0-40")
+    if not (0 <= RX_VGA_GAIN <= 62):
+        errors.append(f"RX_VGA_GAIN={RX_VGA_GAIN} — must be 0-62")
+    if not (0 <= TX_VGA_GAIN <= 47):
+        errors.append(f"TX_VGA_GAIN={TX_VGA_GAIN} — must be 0-47")
+    if not (0.01 <= CTCSS_LEVEL <= 0.5):
+        errors.append(f"CTCSS_LEVEL={CTCSS_LEVEL} — should be 0.01-0.5")
+    if not (67 <= CTCSS_FREQ <= 254):
+        errors.append(f"CTCSS_FREQ={CTCSS_FREQ} — standard range is 67-254 Hz")
+    if errors:
+        raise ValueError("Config validation failed:\n  " + "\n  ".join(errors))
+
+
+_validate()

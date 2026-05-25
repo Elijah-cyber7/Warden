@@ -4,3 +4,4 @@ from radio.demod import FMDemodulator
 from radio.modulator import FMModulator
 from radio.rx import RXProcessor
 from radio.tx import TXProcessor
+from radio.controller import RadioController
