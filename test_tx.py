@@ -74,7 +74,7 @@ def test_tone_tx(freq: float = 1000.0, duration: float = 2.0):
     
     try:
         print("[TEST] Transmitting...")
-        tx.transmit(audio, lead_in=0.2, lead_out=0.2)
+        tx.transmit(audio, lead_in=0.4, lead_out=0.2)
         print("[TEST] Done!")
     finally:
         sdr.close()
