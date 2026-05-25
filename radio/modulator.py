@@ -78,10 +78,13 @@ class FMModulator:
         
         # 3. Add CTCSS tone post-filter/pre-emphasis
         if self._ctcss_enabled and with_ctcss:
+            audio = self._limit_voice_for_ctcss(audio)
             ctcss = self._generate_ctcss(len(audio))
             audio = audio + ctcss
+        else:
+            audio = np.clip(audio, -1.0, 1.0)
         
-        # Clip the combined signal
+        # Clip only as a final safety net; voice is already scaled to leave CTCSS headroom.
         audio = np.clip(audio, -1.0, 1.0).astype(np.float32)
         
         # 4. Interpolate to intermediate rate
@@ -113,9 +116,22 @@ class FMModulator:
     
     def _generate_ctcss(self, num_samples: int) -> np.ndarray:
         """Generate CTCSS tone samples at audio rate."""
+        if num_samples <= 0:
+            return np.array([], dtype=np.float32)
         phases = self._ctcss_phase + self._ctcss_phase_inc * np.arange(num_samples)
         self._ctcss_phase = (phases[-1] + self._ctcss_phase_inc) % (2.0 * np.pi)
         return (CTCSS_LEVEL * np.sin(phases)).astype(np.float32)
+    
+    def _limit_voice_for_ctcss(self, audio: np.ndarray) -> np.ndarray:
+        """Scale voice so the sub-audible tone is not flattened by clipping."""
+        if len(audio) == 0:
+            return audio.astype(np.float32)
+        
+        voice_headroom = max(0.0, 1.0 - CTCSS_LEVEL)
+        peak = float(np.max(np.abs(audio)))
+        if peak > voice_headroom and peak > 0.0:
+            audio = audio * (voice_headroom / peak)
+        return audio.astype(np.float32)
     
     def reset(self):
         """Reset modulator state."""

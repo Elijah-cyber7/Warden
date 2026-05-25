@@ -85,15 +85,15 @@ class DeemphasisFilter:
 
 class PreemphasisFilter:
     """
-    Single-pole IIR highpass for pre-emphasis.
-    Boosts high frequencies before transmission (inverse of de-emphasis).
+    Single-zero FIR pre-emphasis filter.
+    Boosts high frequencies before transmission without adding low-frequency gain.
     """
     
     def __init__(self, sample_rate: int = AUDIO_RATE):
         self._alpha = np.exp(-1.0 / (sample_rate * EMPHASIS_TAU))
-        self._b = np.array([1.0])
-        self._a = np.array([1.0, -self._alpha])
-        self._zi = lfilter_zi(self._b, self._a)
+        self._b = np.array([1.0, -self._alpha])
+        self._a = np.array([1.0])
+        self._zi = np.zeros(len(self._b) - 1, dtype=np.float64)
     
     def process(self, audio: np.ndarray) -> np.ndarray:
         """Apply pre-emphasis with state preservation."""
@@ -102,4 +102,4 @@ class PreemphasisFilter:
     
     def reset(self):
         """Reset filter state for new transmission."""
-        self._zi = lfilter_zi(self._b, self._a)
+        self._zi = np.zeros(len(self._b) - 1, dtype=np.float64)
