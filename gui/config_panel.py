@@ -6,11 +6,14 @@ CTCSS settings, and squelch threshold at runtime.
 """
 
 import logging
+import threading
 
+import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QFormLayout, QLabel,
-    QSlider, QDoubleSpinBox, QSpinBox, QGroupBox
+    QSlider, QDoubleSpinBox, QSpinBox, QGroupBox,
+    QPushButton, QHBoxLayout,
 )
 from PySide6.QtGui import QFont
 
@@ -22,9 +25,10 @@ log = logging.getLogger("warden.gui.config")
 class ConfigPanel(QWidget):
     """Live configuration panel with gain/frequency/squelch controls."""
 
-    def __init__(self, sdr=None, parent=None):
+    def __init__(self, sdr=None, radio=None, parent=None):
         super().__init__(parent)
         self._sdr = sdr
+        self._radio = radio
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -108,6 +112,30 @@ class ConfigPanel(QWidget):
 
         layout.addWidget(sq_group)
 
+        # --- Test Tone ---
+        test_group = QGroupBox("Test Tone")
+        test_form = QFormLayout(test_group)
+
+        self._test_freq_spin = QSpinBox()
+        self._test_freq_spin.setRange(100, 4000)
+        self._test_freq_spin.setSuffix(" Hz")
+        self._test_freq_spin.setValue(1000)
+        test_form.addRow("Frequency:", self._test_freq_spin)
+
+        self._test_dur_spin = QDoubleSpinBox()
+        self._test_dur_spin.setRange(0.5, 10.0)
+        self._test_dur_spin.setDecimals(1)
+        self._test_dur_spin.setSingleStep(0.5)
+        self._test_dur_spin.setSuffix(" s")
+        self._test_dur_spin.setValue(2.0)
+        test_form.addRow("Duration:", self._test_dur_spin)
+
+        self._test_btn = QPushButton("Transmit test tone")
+        self._test_btn.clicked.connect(self._on_test_tone_clicked)
+        test_form.addRow(self._test_btn)
+
+        layout.addWidget(test_group)
+
         layout.addStretch()
 
     def _make_slider(self, min_val: int, max_val: int, step: int, value: int) -> QSlider:
@@ -152,3 +180,29 @@ class ConfigPanel(QWidget):
     def _on_squelch_changed(self, value: float):
         config.SQUELCH_THRESHOLD = value
         log.info("Squelch threshold → %.2f", value)
+
+    def _on_test_tone_clicked(self):
+        if self._radio is None:
+            log.warning("Test tone: no radio controller wired up")
+            return
+        freq = int(self._test_freq_spin.value())
+        dur = float(self._test_dur_spin.value())
+        log.info("Test tone → %d Hz, %.1fs", freq, dur)
+        # Disable the button while the TX is in flight; re-enable from the
+        # worker thread via a queued lambda when done.
+        self._test_btn.setEnabled(False)
+        threading.Thread(
+            target=self._run_test_tone, args=(freq, dur),
+            daemon=True, name="test-tone-tx",
+        ).start()
+
+    def _run_test_tone(self, freq: int, duration: float):
+        try:
+            n = int(config.AUDIO_RATE * duration)
+            t = np.arange(n, dtype=np.float32) / config.AUDIO_RATE
+            tone = (0.5 * np.sin(2.0 * np.pi * freq * t)).astype(np.float32)
+            self._radio.transmit(tone)
+        except Exception:
+            log.exception("Test tone transmission failed")
+        finally:
+            self._test_btn.setEnabled(True)

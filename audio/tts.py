@@ -52,6 +52,14 @@ def _get_voice() -> PiperVoice:
     return _voice
 
 
+def preload_voice():
+    """Load the Piper voice into memory. Safe to call from a background thread."""
+    try:
+        _get_voice()
+    except Exception as e:
+        log.error("Piper preload failed: %s", e)
+
+
 def synthesize_speech(text: str) -> np.ndarray:
     """Synthesize speech locally via Piper. Returns float32 audio at AUDIO_RATE."""
     voice = _get_voice()

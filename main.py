@@ -19,9 +19,25 @@ from config import OPENAI_API_KEY
 from audio.player import audio_worker, audio_queue
 from radio.sdr import SDRDevice
 from radio.controller import RadioController
-from audio.tts import set_bridge as set_tts_bridge, set_radio_controller
+from audio.tts import (
+    set_bridge as set_tts_bridge,
+    set_radio_controller,
+    preload_voice,
+)
+from transcription import preload_model as preload_whisper
 
 log = logging.getLogger("warden")
+
+
+def start_model_preload():
+    """Warm up Whisper + Piper on background threads so the GUI is responsive
+    immediately and the first transcription / TTS doesn't pay the load cost."""
+    threading.Thread(
+        target=preload_whisper, daemon=True, name="preload-whisper"
+    ).start()
+    threading.Thread(
+        target=preload_voice, daemon=True, name="preload-tts"
+    ).start()
 
 
 class GuiLogHandler(logging.Handler):
@@ -75,7 +91,7 @@ def run_gui(sdr: SDRDevice):
     radio = RadioController(sdr, bridge=bridge)
     set_radio_controller(radio)
 
-    window = WardenWindow(bridge, sdr=sdr)
+    window = WardenWindow(bridge, sdr=sdr, radio=radio)
     window.show()
 
     rx_thread = threading.Thread(target=radio.start_rx, daemon=True)
@@ -102,6 +118,8 @@ def main():
 
     audio_thread = threading.Thread(target=audio_worker, daemon=True)
     audio_thread.start()
+
+    start_model_preload()
 
     sdr = SDRDevice()
     if not sdr.open():

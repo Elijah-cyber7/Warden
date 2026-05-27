@@ -25,9 +25,10 @@ log = logging.getLogger("warden.gui")
 class WardenWindow(QMainWindow):
     """Main application window."""
 
-    def __init__(self, bridge: StateBridge, sdr=None, parent=None):
+    def __init__(self, bridge: StateBridge, sdr=None, radio=None, parent=None):
         super().__init__(parent)
         self._bridge = bridge
+        self._radio = radio
 
         self.setWindowTitle("Warden — SDR Dispatch")
         self.setMinimumSize(1100, 750)
@@ -62,7 +63,7 @@ class WardenWindow(QMainWindow):
 
         self._transcript = TranscriptPanel()
         self._logs = LogPanel()
-        self._config_panel = ConfigPanel(sdr=sdr)
+        self._config_panel = ConfigPanel(sdr=sdr, radio=radio)
 
         bottom_splitter.addWidget(self._transcript)
         bottom_splitter.addWidget(self._logs)

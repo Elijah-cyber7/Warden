@@ -8,7 +8,7 @@ import logging
 import threading
 
 import numpy as np
-from config import AUDIO_RATE
+from config import AUDIO_RATE, TX_LEAD_IN_SEC, TX_LEAD_OUT_SEC
 from radio.sdr import SDRDevice
 from radio.rx import RXProcessor
 from radio.tx import TXProcessor
@@ -38,7 +38,9 @@ class RadioController:
     def tx(self) -> TXProcessor:
         return self._tx
 
-    def transmit(self, audio: np.ndarray, lead_in: float = 0.1, lead_out: float = 0.5):
+    def transmit(self, audio: np.ndarray,
+                 lead_in: float = TX_LEAD_IN_SEC,
+                 lead_out: float = TX_LEAD_OUT_SEC):
         """
         Transmit audio, pausing RX for the duration.
 

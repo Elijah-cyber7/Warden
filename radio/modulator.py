@@ -7,9 +7,10 @@ Proper NBFM modulation with bandwidth limiting and CTCSS.
 
 import numpy as np
 from scipy.signal import firwin, lfilter, lfilter_zi, resample_poly
+import config
 from config import (
     SAMPLE_RATE, AUDIO_RATE, NBFM_DEVIATION, DECIMATION,
-    CTCSS_FREQ, CTCSS_LEVEL, VOICE_HP_CUTOFF, VOICE_LP_CUTOFF
+    VOICE_HP_CUTOFF, VOICE_LP_CUTOFF,
 )
 from audio.filters import PreemphasisFilter
 
@@ -27,8 +28,15 @@ class FMModulator:
     3. Add CTCSS tone (post-filter so it bypasses voice HP)
     4. Interpolate to intermediate rate
     5. FM modulate (audio -> phase -> IQ)
-    6. Channel filter (Carson's rule BW)
-    7. Interpolate to SDR sample rate
+    6. Interpolate to SDR sample rate
+
+    Note: there is intentionally NO real-valued baseband channel filter on I/Q.
+    Filtering I and Q independently with a real lowpass destroys FM's
+    constant-envelope property and grafts amplitude modulation onto the
+    output (peaks well past unity → DAC clipping → splatter and a low-freq
+    AM wobble that wrecks the receiver's CTCSS decoder). Carson's-rule
+    bandwidth is already enforced by the choice of NBFM_DEVIATION and the
+    voice low-pass; the resample_poly stages handle anti-imaging.
     """
 
     def __init__(self, ctcss_enabled: bool = True):
@@ -41,13 +49,6 @@ class FMModulator:
 
         self._ctcss_enabled = ctcss_enabled
         self._ctcss_phase = 0.0
-        self._ctcss_phase_inc = 2.0 * np.pi * CTCSS_FREQ / AUDIO_RATE
-
-        carson_bw = 2 * (NBFM_DEVIATION + VOICE_LP_CUTOFF)
-        channel_cutoff = min(carson_bw / 2, INTERMEDIATE_RATE / 2 * 0.9)
-        self._channel_taps = firwin(65, channel_cutoff, fs=INTERMEDIATE_RATE)
-        self._channel_zi_I = lfilter_zi(self._channel_taps, 1.0)
-        self._channel_zi_Q = lfilter_zi(self._channel_taps, 1.0)
 
         self._phase = 0.0
         self._phase_sensitivity = 2.0 * np.pi * NBFM_DEVIATION / INTERMEDIATE_RATE
@@ -83,31 +84,30 @@ class FMModulator:
         phase = self._phase + np.cumsum(phase_delta)
         self._phase = phase[-1] % (2.0 * np.pi)
 
-        I = np.cos(phase).astype(np.float32)
-        Q = np.sin(phase).astype(np.float32)
+        # Generate complex-baseband FM signal. We work on the complex signal
+        # directly so the resample_poly anti-imaging filter sees I and Q as
+        # one entity and preserves the constant envelope.
+        iq_inter = np.exp(1j * phase).astype(np.complex64)
 
-        I, self._channel_zi_I = lfilter(self._channel_taps, 1.0, I, zi=self._channel_zi_I)
-        Q, self._channel_zi_Q = lfilter(self._channel_taps, 1.0, Q, zi=self._channel_zi_Q)
+        iq_out = resample_poly(iq_inter, DECIMATION, 1).astype(np.complex64)
 
-        I_out = resample_poly(I, DECIMATION, 1).astype(np.float32)
-        Q_out = resample_poly(Q, DECIMATION, 1).astype(np.float32)
-
-        return (I_out + 1j * Q_out).astype(np.complex64)
+        return iq_out
 
     def _generate_ctcss(self, num_samples: int) -> np.ndarray:
         """Generate phase-continuous CTCSS tone samples at audio rate."""
         if num_samples <= 0:
             return np.array([], dtype=np.float32)
-        phases = self._ctcss_phase + self._ctcss_phase_inc * np.arange(num_samples)
-        self._ctcss_phase = (phases[-1] + self._ctcss_phase_inc) % (2.0 * np.pi)
-        return (CTCSS_LEVEL * np.sin(phases)).astype(np.float32)
+        phase_inc = 2.0 * np.pi * config.CTCSS_FREQ / AUDIO_RATE
+        phases = self._ctcss_phase + phase_inc * np.arange(num_samples)
+        self._ctcss_phase = (phases[-1] + phase_inc) % (2.0 * np.pi)
+        return (config.CTCSS_LEVEL * np.sin(phases)).astype(np.float32)
 
     def _scale_voice_for_ctcss(self, audio: np.ndarray) -> np.ndarray:
         """Scale voice amplitude to leave headroom for the CTCSS tone."""
         if len(audio) == 0:
             return audio.astype(np.float32)
 
-        headroom = max(0.0, 1.0 - CTCSS_LEVEL)
+        headroom = max(0.0, 1.0 - config.CTCSS_LEVEL)
         peak = float(np.max(np.abs(audio)))
         if peak > headroom and peak > 0.0:
             audio = audio * (headroom / peak)
@@ -119,8 +119,6 @@ class FMModulator:
         self._voice_lp_zi = lfilter_zi(self._voice_lp_taps, 1.0)
         self._preemphasis.reset()
         self._ctcss_phase = 0.0
-        self._channel_zi_I = lfilter_zi(self._channel_taps, 1.0)
-        self._channel_zi_Q = lfilter_zi(self._channel_taps, 1.0)
         self._phase = 0.0
 
     @property

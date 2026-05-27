@@ -18,7 +18,7 @@ BUFF_SIZE = 1024 * 256      # IQ buffer size (samples)
 # -----------------------------------------------------------------------------
 # Frequency
 # -----------------------------------------------------------------------------
-CENTER_FREQ = 462.61255e6   # Tune frequency (Hz) — FRS channel
+CENTER_FREQ = 462.6125e6   # Tune frequency (Hz) — FRS channel
 CHANNEL_BW = 12500          # NBFM channel bandwidth (Hz)
 
 # -----------------------------------------------------------------------------
@@ -36,15 +36,25 @@ RX_AMP_ENABLE = False       # External 14dB amp — usually not needed
 # VGA: 0-47 dB (TX IF gain)
 # AMP: 0 or 14 dB (TX RF amp enable)
 # -----------------------------------------------------------------------------
-TX_VGA_GAIN = 30            # TX IF gain
+TX_VGA_GAIN = 0             # TX IF gain (0 dB default — bench testing with
+                            # a nearby walkie-talkie; raise only if needed)
 TX_AMP_ENABLE = False       # TX RF amp — BE CAREFUL with power levels
 TX_SETTLE_SEC = 0.3         # Pause after start_tx before first IQ write
-TX_VOICE_GAIN = 1.5         # Voice gain before TX modulation
+TX_LEAD_IN_SEC = 0.4        # CTCSS-only carrier before voice
+TX_LEAD_OUT_SEC = 0.5       # CTCSS-only carrier after voice
 
 # -----------------------------------------------------------------------------
 # CTCSS (Continuous Tone-Coded Squelch System)
 # Required for walkie-talkies to open their squelch.
-# Deviation = NBFM_DEVIATION * CTCSS_LEVEL; target 300-750 Hz.
+#
+# Effective FM deviation contributed by the tone:
+#     CTCSS deviation (Hz) = NBFM_DEVIATION * CTCSS_LEVEL
+#
+# The "standard" commercial spec is 300–750 Hz, but many consumer FRS/GMRS
+# handhelds have very narrow sub-audible bandpasses and actually want a much
+# smaller CTCSS injection — pushing it too hard makes the decoder treat the
+# tone as voice and reject it. 0.03 * 2500 = 75 Hz, which matches what this
+# radio responds to. If you change radios, tune this empirically.
 # -----------------------------------------------------------------------------
 CTCSS_FREQ = 127.3          # CTCSS tone frequency (Hz) — must match radio
 CTCSS_LEVEL = 0.03          # Tone amplitude relative to full deviation
@@ -115,6 +125,12 @@ def _validate():
         errors.append(f"CTCSS_LEVEL={CTCSS_LEVEL} — should be 0.01-0.5")
     if not (67 <= CTCSS_FREQ <= 254):
         errors.append(f"CTCSS_FREQ={CTCSS_FREQ} — standard range is 67-254 Hz")
+    # Note: no upper-bound check on CTCSS deviation here. Different radios
+    # accept very different injection levels; the right value is empirical.
+    if TX_LEAD_IN_SEC < 0:
+        errors.append(f"TX_LEAD_IN_SEC={TX_LEAD_IN_SEC} — must be >= 0")
+    if TX_LEAD_OUT_SEC < 0:
+        errors.append(f"TX_LEAD_OUT_SEC={TX_LEAD_OUT_SEC} — must be >= 0")
     if errors:
         raise ValueError("Config validation failed:\n  " + "\n  ".join(errors))
 
