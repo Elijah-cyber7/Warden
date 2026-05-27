@@ -94,7 +94,8 @@ NO_SPEECH_THRESHOLD = 0.6   # Reject if no_speech_prob exceeds this
 # -----------------------------------------------------------------------------
 # Dispatch
 # -----------------------------------------------------------------------------
-CALLSIGNS = ["Alpha X-Ray 3-1", "Bravo 7", "dispatch"]
+ASSISTANT_NAME = "Jarvis"   # How the assistant identifies itself in replies
+CALLSIGNS = ["Alpha X-Ray 3-1", "Bravo 7", "dispatch", ASSISTANT_NAME]
 WHISPER_INITIAL_PROMPT = ", ".join(CALLSIGNS)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")

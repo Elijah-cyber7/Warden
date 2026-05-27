@@ -14,6 +14,7 @@ from PySide6.QtGui import QPalette, QColor
 
 from gui.bridge import StateBridge
 from gui.spectrum import SpectrumWidget
+from gui.signal_meter import SignalMeter
 from gui.status_bar import StatusBar
 from gui.transcript_panel import TranscriptPanel
 from gui.log_panel import LogPanel
@@ -31,7 +32,7 @@ class WardenWindow(QMainWindow):
         self._radio = radio
 
         self.setWindowTitle("Warden — SDR Dispatch")
-        self.setMinimumSize(1100, 750)
+        self.setMinimumSize(1100, 900)
         self._apply_dark_theme()
 
         central = QWidget()
@@ -47,14 +48,17 @@ class WardenWindow(QMainWindow):
         # Main vertical splitter: spectrum area / bottom panels
         main_splitter = QSplitter(Qt.Orientation.Vertical)
 
-        # Top: spectrum display
+        # Top: signal meter + spectrum display
         spectrum_container = QWidget()
         spectrum_layout = QVBoxLayout(spectrum_container)
         spectrum_layout.setContentsMargins(0, 0, 0, 0)
-        spectrum_layout.setSpacing(2)
+        spectrum_layout.setSpacing(4)
+
+        self._signal_meter = SignalMeter()
+        spectrum_layout.addWidget(self._signal_meter)
 
         self._spectrum = SpectrumWidget()
-        spectrum_layout.addWidget(self._spectrum)
+        spectrum_layout.addWidget(self._spectrum, stretch=1)
 
         main_splitter.addWidget(spectrum_container)
 
@@ -71,14 +75,19 @@ class WardenWindow(QMainWindow):
         bottom_splitter.setSizes([360, 360, 280])
 
         main_splitter.addWidget(bottom_splitter)
-        main_splitter.setSizes([560, 150])
+        # Spectrum gets ~2x the height of the bottom panels.
+        main_splitter.setSizes([1120, 150])
+        main_splitter.setStretchFactor(0, 4)
+        main_splitter.setStretchFactor(1, 1)
 
         root_layout.addWidget(main_splitter)
 
         # Connect bridge signals to widgets
         self._bridge.iq_ready.connect(self._on_iq)
         self._bridge.squelch_changed.connect(self._status_bar.set_squelch)
+        self._bridge.squelch_changed.connect(self._signal_meter.set_level)
         self._bridge.tx_state_changed.connect(self._status_bar.set_mode)
+        self._bridge.tx_state_changed.connect(self._signal_meter.set_transmitting)
         self._bridge.transcription_ready.connect(self._transcript.add_entry)
         self._bridge.log_ready.connect(self._logs.add_log)
 

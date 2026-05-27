@@ -22,13 +22,13 @@ class LogPanel(QWidget):
         layout.setContentsMargins(4, 4, 4, 4)
 
         header = QLabel("Logs")
-        header.setFont(QFont("Menlo", 11, QFont.Weight.Bold))
+        header.setFont(QFont("Menlo", 14, QFont.Weight.Bold))
         header.setStyleSheet("color: #cccccc;")
         layout.addWidget(header)
 
         self._log = QTextEdit()
         self._log.setReadOnly(True)
-        self._log.setFont(QFont("Menlo", 9))
+        self._log.setFont(QFont("Menlo", 18))
         self._log.setStyleSheet(
             "QTextEdit { background-color: #1e1e1e; color: #cccccc; border: none; }"
         )

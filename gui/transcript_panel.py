@@ -11,6 +11,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLabel
 from PySide6.QtGui import QFont, QTextCursor, QColor
 
+from config import ASSISTANT_NAME
+
 
 class TranscriptPanel(QWidget):
     """Scrolling log of transcription results."""
@@ -24,13 +26,13 @@ class TranscriptPanel(QWidget):
         layout.setContentsMargins(4, 4, 4, 4)
 
         header = QLabel("Radio Log")
-        header.setFont(QFont("Menlo", 11, QFont.Weight.Bold))
+        header.setFont(QFont("Menlo", 14, QFont.Weight.Bold))
         header.setStyleSheet("color: #cccccc;")
         layout.addWidget(header)
 
         self._log = QTextEdit()
         self._log.setReadOnly(True)
-        self._log.setFont(QFont("Menlo", 10))
+        self._log.setFont(QFont("Menlo", 18))
         self._log.setStyleSheet(
             "QTextEdit { background-color: #1e1e1e; color: #cccccc; border: none; }"
         )
@@ -42,7 +44,7 @@ class TranscriptPanel(QWidget):
         """Add a timestamped transcription entry."""
         timestamp = datetime.now().strftime("%H:%M:%S")
 
-        if text.startswith("Warden:"):
+        if text.startswith(f"{ASSISTANT_NAME}:"):
             color = "#66ccff"
             prefix = "<<<"
         elif matched:

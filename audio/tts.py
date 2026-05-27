@@ -15,7 +15,7 @@ import numpy as np
 from piper import PiperVoice
 from scipy.signal import resample_poly
 
-from config import AUDIO_RATE, PIPER_VOICE, PIPER_VOICES_DIR, TTS_OUTPUT
+from config import AUDIO_RATE, ASSISTANT_NAME, PIPER_VOICE, PIPER_VOICES_DIR, TTS_OUTPUT
 from audio.player import audio_queue
 
 log = logging.getLogger("warden.tts")
@@ -84,7 +84,7 @@ def speak(text: str):
     """Synthesize speech and route to radio TX and/or laptop speakers."""
     log.info("Speaking: %s", text)
     if _bridge:
-        _bridge.emit_transcription(f"Warden: {text}", True)
+        _bridge.emit_transcription(f"{ASSISTANT_NAME}: {text}", True)
 
     audio = synthesize_speech(text)
 
