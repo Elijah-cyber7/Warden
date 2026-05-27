@@ -19,6 +19,7 @@ from gui.status_bar import StatusBar
 from gui.transcript_panel import TranscriptPanel
 from gui.log_panel import LogPanel
 from gui.config_panel import ConfigPanel
+from gui.bit_panel import BITPanel
 
 log = logging.getLogger("warden.gui")
 
@@ -68,11 +69,13 @@ class WardenWindow(QMainWindow):
         self._transcript = TranscriptPanel()
         self._logs = LogPanel()
         self._config_panel = ConfigPanel(sdr=sdr, radio=radio)
+        self._bit_panel = BITPanel(sdr=sdr, radio=radio, bridge=bridge)
 
         bottom_splitter.addWidget(self._transcript)
         bottom_splitter.addWidget(self._logs)
         bottom_splitter.addWidget(self._config_panel)
-        bottom_splitter.setSizes([360, 360, 280])
+        bottom_splitter.addWidget(self._bit_panel)
+        bottom_splitter.setSizes([320, 320, 240, 240])
 
         main_splitter.addWidget(bottom_splitter)
         # Spectrum gets ~2x the height of the bottom panels.

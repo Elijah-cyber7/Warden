@@ -21,6 +21,7 @@ class StateBridge(QObject):
     tx_state_changed = Signal(bool)
     transcription_ready = Signal(str, bool)
     log_ready = Signal(str)
+    bit_result_ready = Signal(str, str, str, str)  # test_name, status, measurement, detail
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -44,3 +45,7 @@ class StateBridge(QObject):
     def emit_log(self, text: str):
         """Called when a log record should be shown in the GUI."""
         self.log_ready.emit(text)
+
+    def emit_bit_result(self, test_name: str, status: str, measurement: str, detail: str):
+        """Called from BIT runner thread with test results."""
+        self.bit_result_ready.emit(test_name, status, measurement, detail)
