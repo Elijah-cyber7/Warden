@@ -35,7 +35,7 @@ STATUS_COLORS = {
 
 THRESHOLDS = {
     "usb_health": ">= 3.5 MB/s, < 1% err",
-    "fifo_integrity": "0 stalls, < 5% drift",
+    "fifo_integrity": "0 stalls, 0 sample loss",
 }
 
 

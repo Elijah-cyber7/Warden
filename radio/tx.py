@@ -79,8 +79,8 @@ class TXProcessor:
             elapsed = time.monotonic() - write_start
             drain = target_dur - elapsed
             if drain > 0:
-                time.sleep(drain + 0.05)
-                log.debug("Drained TX FIFO for %.3fs", drain + 0.05)
+                time.sleep(drain + 0.20)
+                log.debug("Drained TX FIFO for %.3fs", drain + 0.20)
             self._sdr.stop_tx()
             log.info("Transmission complete")
 

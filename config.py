@@ -39,8 +39,10 @@ RX_AMP_ENABLE = False       # External 14dB amp — usually not needed
 TX_VGA_GAIN = 0             # TX IF gain (0 dB default — bench testing with
                             # a nearby walkie-talkie; raise only if needed)
 TX_AMP_ENABLE = False       # TX RF amp — BE CAREFUL with power levels
-TX_SETTLE_SEC = 0.3         # Pause after start_tx before first IQ write
-TX_LEAD_IN_SEC = 0.4        # CTCSS-only carrier before voice
+TX_SETTLE_SEC = 0.6         # Pause after start_tx before first IQ write
+                            # (PLL lock time varies — needs headroom)
+TX_LEAD_IN_SEC = 0.8        # CTCSS-only carrier before voice
+                            # (first ~300ms may be unstable post-PLL lock)
 TX_LEAD_OUT_SEC = 0.5       # CTCSS-only carrier after voice
 
 # -----------------------------------------------------------------------------

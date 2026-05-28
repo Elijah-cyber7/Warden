@@ -87,7 +87,7 @@ class BITRunner:
         if test_name == "usb_health":
             return f"{result.throughput_mbs:.1f} MB/s"
         elif test_name == "fifo_integrity":
-            return f"{result.stall_count} stalls"
+            return f"{result.stall_count} stalls, {result.samples_written}/{result.samples_expected} samples"
         return ""
 
     def _emit(self, status: str, test_name: str, measurement: str, detail: str):
