@@ -5,6 +5,7 @@ Streams silence IQ to the HackRF and checks that the USB pipe can sustain
 the required data rate without excessive errors.
 """
 
+import logging
 import time
 from dataclasses import dataclass
 
@@ -13,6 +14,8 @@ import SoapySDR
 
 from config import SAMPLE_RATE
 
+
+log = logging.getLogger("warden.bit.usb")
 
 EXPECTED_THROUGHPUT_MBS = 3.5
 MAX_ERROR_RATE = 0.01
@@ -43,6 +46,9 @@ def run(device) -> USBHealthResult:
     silence = np.zeros(CHUNK_SAMPLES, dtype=np.complex64)
     bytes_per_sample = 8  # complex64 = 4 bytes I + 4 bytes Q
 
+    log.info("USB Health: opening TX stream (%d-sample chunks, %.1fs test)",
+             CHUNK_SAMPLES, TEST_DURATION_SEC)
+
     stream = device.setupStream(SoapySDR.SOAPY_SDR_TX, SoapySDR.SOAPY_SDR_CF32)
     device.activateStream(stream)
     time.sleep(0.3)
@@ -62,6 +68,9 @@ def run(device) -> USBHealthResult:
                 total_samples_written += sr.ret
             else:
                 failed_writes += 1
+                log.warning("USB Health: writeStream returned %d on write #%d "
+                            "(%.3fs into test)",
+                            sr.ret, total_writes, time.monotonic() - start)
 
         elapsed = time.monotonic() - start
     finally:
@@ -73,6 +82,12 @@ def run(device) -> USBHealthResult:
     error_rate = failed_writes / total_writes if total_writes > 0 else 1.0
 
     passed = throughput_mbs >= EXPECTED_THROUGHPUT_MBS and error_rate < MAX_ERROR_RATE
+
+    log.info("USB Health: %d writes in %.2fs — %d failed (%.1f%% error rate)",
+             total_writes, elapsed, failed_writes, error_rate * 100)
+    log.info("USB Health: throughput %.2f MB/s (need >= %.1f MB/s)",
+             throughput_mbs, EXPECTED_THROUGHPUT_MBS)
+    log.info("USB Health: %s", "PASS" if passed else "FAIL")
 
     if passed:
         detail = f"{throughput_mbs:.1f} MB/s, {error_rate*100:.1f}% errors"
