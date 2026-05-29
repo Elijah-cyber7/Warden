@@ -8,7 +8,7 @@ import logging
 import threading
 
 import numpy as np
-from config import AUDIO_RATE
+from config import AUDIO_RATE, TX_LEAD_IN_SEC, TX_LEAD_OUT_SEC
 from radio.sdr import SDRDevice
 from radio.rx import RXProcessor
 from radio.tx import TXProcessor
@@ -23,9 +23,10 @@ class RadioController:
     Ensures RX is paused while transmitting and resumed after.
     """
 
-    def __init__(self, sdr: SDRDevice):
+    def __init__(self, sdr: SDRDevice, bridge=None):
         self._sdr = sdr
-        self._rx = RXProcessor(sdr)
+        self._bridge = bridge
+        self._rx = RXProcessor(sdr, bridge=bridge)
         self._tx = TXProcessor(sdr)
         self._tx_lock = threading.Lock()
 
@@ -37,7 +38,9 @@ class RadioController:
     def tx(self) -> TXProcessor:
         return self._tx
 
-    def transmit(self, audio: np.ndarray, lead_in: float = 0.1, lead_out: float = 0.5):
+    def transmit(self, audio: np.ndarray,
+                 lead_in: float = TX_LEAD_IN_SEC,
+                 lead_out: float = TX_LEAD_OUT_SEC):
         """
         Transmit audio, pausing RX for the duration.
 
@@ -49,10 +52,14 @@ class RadioController:
         with self._tx_lock:
             log.info("Switching to TX")
             self._rx.pause()
+            if self._bridge:
+                self._bridge.emit_tx_state(True)
 
             try:
                 self._tx.transmit(audio, lead_in=lead_in, lead_out=lead_out)
             finally:
+                if self._bridge:
+                    self._bridge.emit_tx_state(False)
                 log.info("Switching to RX")
                 self._rx.resume()
 

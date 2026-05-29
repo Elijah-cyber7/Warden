@@ -15,13 +15,14 @@ import numpy as np
 from piper import PiperVoice
 from scipy.signal import resample_poly
 
-from config import AUDIO_RATE, PIPER_VOICE, PIPER_VOICES_DIR, TTS_OUTPUT
+from config import AUDIO_RATE, ASSISTANT_NAME, PIPER_VOICE, PIPER_VOICES_DIR, TTS_OUTPUT
 from audio.player import audio_queue
 
 log = logging.getLogger("warden.tts")
 
 _voice: PiperVoice | None = None
 _radio_controller = None
+_bridge = None
 _tx_lock = threading.Lock()
 
 
@@ -29,6 +30,12 @@ def set_radio_controller(controller):
     """Register the radio controller (called once from main.py)."""
     global _radio_controller
     _radio_controller = controller
+
+
+def set_bridge(bridge):
+    """Register the GUI bridge for outgoing TTS notifications."""
+    global _bridge
+    _bridge = bridge
 
 
 def _get_voice() -> PiperVoice:
@@ -43,6 +50,14 @@ def _get_voice() -> PiperVoice:
         _voice = PiperVoice.load(str(model_path))
         log.info("Loaded voice: %s", PIPER_VOICE)
     return _voice
+
+
+def preload_voice():
+    """Load the Piper voice into memory. Safe to call from a background thread."""
+    try:
+        _get_voice()
+    except Exception as e:
+        log.error("Piper preload failed: %s", e)
 
 
 def synthesize_speech(text: str) -> np.ndarray:
@@ -68,6 +83,9 @@ def synthesize_speech(text: str) -> np.ndarray:
 def speak(text: str):
     """Synthesize speech and route to radio TX and/or laptop speakers."""
     log.info("Speaking: %s", text)
+    if _bridge:
+        _bridge.emit_transcription(f"{ASSISTANT_NAME}: {text}", True)
+
     audio = synthesize_speech(text)
 
     if TTS_OUTPUT in ("transmit", "both"):

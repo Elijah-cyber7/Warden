@@ -5,6 +5,7 @@ Uses MLX Whisper (Apple Silicon optimized) for real-time speech-to-text.
 """
 
 import logging
+import time
 
 import numpy as np
 from scipy.signal import resample_poly
@@ -19,6 +20,34 @@ from dispatch.preamble import check_preamble
 log = logging.getLogger("warden.whisper")
 
 WHISPER_RATE = 16000
+
+
+def preload_model():
+    """
+    Pre-load Whisper weights and warm the MLX compile cache.
+
+    mlx_whisper caches the loaded model in a module-level ModelHolder, so a
+    single transcribe() call with a tiny silence buffer is enough to (a) pull
+    the weights from disk/HF into memory and (b) trigger the @mx.compile JIT
+    for the decode kernels. Subsequent real transcribes skip both costs.
+
+    Safe to call from a background thread on startup.
+    """
+    log.info("Preloading Whisper model: %s", WHISPER_MODEL)
+    t0 = time.monotonic()
+    try:
+        silent = np.zeros(WHISPER_RATE, dtype=np.float32)
+        mlx_whisper.transcribe(
+            silent,
+            path_or_hf_repo=WHISPER_MODEL,
+            language="en",
+            no_speech_threshold=1.0,
+            condition_on_previous_text=False,
+        )
+        log.info("Whisper ready in %.1fs", time.monotonic() - t0)
+    except Exception as e:
+        log.error("Whisper preload failed (%.1fs in): %s",
+                  time.monotonic() - t0, e)
 
 
 def transcribe_audio(audio_48k: np.ndarray):

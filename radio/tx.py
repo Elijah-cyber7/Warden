@@ -9,14 +9,18 @@ import logging
 import time
 
 import numpy as np
-from config import AUDIO_RATE, SAMPLE_RATE, TX_SETTLE_SEC
+from config import (
+    AUDIO_RATE, SAMPLE_RATE, TX_SETTLE_SEC,
+    TX_LEAD_IN_SEC, TX_LEAD_OUT_SEC,
+)
 from radio.sdr import SDRDevice
 from radio.modulator import FMModulator
 
 log = logging.getLogger("warden.tx")
 
-TX_CHUNK_DURATION = 0.05
-TX_CHUNK_SAMPLES = int(SAMPLE_RATE * TX_CHUNK_DURATION)
+# Large chunks so we keep the HackRF TX FIFO full. Soapy blocks on writeStream
+# when the FIFO is full, so this naturally rate-limits without us calling sleep.
+TX_CHUNK_SAMPLES = 1 << 18  # 262_144 samples (~131 ms at 2 MSPS)
 
 
 class TXProcessor:
@@ -31,7 +35,9 @@ class TXProcessor:
         self._sdr = sdr
         self._modulator = FMModulator(ctcss_enabled=True)
 
-    def transmit(self, audio: np.ndarray, lead_in: float = 0.2, lead_out: float = 0.5):
+    def transmit(self, audio: np.ndarray,
+                 lead_in: float = TX_LEAD_IN_SEC,
+                 lead_out: float = TX_LEAD_OUT_SEC):
         """
         Transmit audio with CTCSS tone.
 
@@ -59,28 +65,36 @@ class TXProcessor:
         self._sdr.start_tx()
         time.sleep(TX_SETTLE_SEC)
 
+        write_start = time.monotonic()
         try:
-            self._write_paced(iq)
+            self._write_blocking(iq)
         finally:
+            # SoapyHackRF's deactivateStream halts TX immediately rather than
+            # draining. If we stop right after the last writeStream returns,
+            # whatever is still queued in the HackRF FIFO (typ. a few hundred
+            # ms at 2 MSPS) is silently truncated — including the CTCSS
+            # lead-out. Sleep for the remaining signal duration so the FIFO
+            # has actually played out into RF before we cut the carrier.
+            target_dur = len(iq) / SAMPLE_RATE
+            elapsed = time.monotonic() - write_start
+            drain = target_dur - elapsed
+            if drain > 0:
+                time.sleep(drain + 0.20)
+                log.debug("Drained TX FIFO for %.3fs", drain + 0.20)
             self._sdr.stop_tx()
             log.info("Transmission complete")
 
-    def _write_paced(self, iq: np.ndarray):
-        """Write IQ data to SDR paced to real-time to prevent buffer overflow."""
-        start_time = time.monotonic()
-        samples_written = 0
-        total_written = 0
+    def _write_blocking(self, iq: np.ndarray):
+        """
+        Stream IQ data to the SDR.
 
+        Soapy's writeStream blocks once the HackRF TX FIFO is full, which is the
+        correct backpressure mechanism. Avoid sleeping between writes — that can
+        let the FIFO drain and produce a brief carrier dropout, which the
+        receiver hears as a CTCSS / phase glitch.
+        """
+        total_written = 0
         for i in range(0, len(iq), TX_CHUNK_SAMPLES):
             chunk = iq[i:i + TX_CHUNK_SAMPLES]
-            written = self._sdr.write_tx(chunk)
-            samples_written += len(chunk)
-            total_written += written
-
-            elapsed = time.monotonic() - start_time
-            expected_elapsed = samples_written / SAMPLE_RATE
-            sleep_time = expected_elapsed - elapsed - 0.01
-            if sleep_time > 0:
-                time.sleep(sleep_time)
-
+            total_written += self._sdr.write_tx(chunk)
         log.debug("Wrote %d/%d IQ samples", total_written, len(iq))

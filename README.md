@@ -1,77 +1,83 @@
 # Warden
 
-Software-defined radio dispatch pipeline. Receives FM transmissions via HackRF, demodulates and transcribes audio in real time, matches callsigns, queries an AI backend, and transmits the response back over the air.
+An AI-powered radio dispatch system built on software-defined radio. Warden listens on a configured frequency, transcribes incoming voice transmissions in real time, detects operator callsigns, queries an LLM for a response, synthesizes speech locally, and transmits the reply back over the air — all hands-free.
 
-## What it does
+Think of it as a voice-activated AI assistant that lives on a radio channel.
 
-- Receives narrowband FM via HackRF One
-- Demodulates NBFM with proper channel filtering and de-emphasis
-- Gates audio via power-squelch to suppress noise between transmissions
-- Transcribes speech using MLX Whisper (Apple Silicon)
-- Matches configurable callsigns/preambles in transcriptions
-- Dispatches matched speech to OpenAI and speaks the reply via Piper TTS
-- Transmits responses over FM with CTCSS tone (half-duplex)
+## How It Works
+
+```
+Operator keys up radio        Warden (HackRF One)
+        |                            |
+        |  ── FM voice + CTCSS ──▶   |  Receive & demodulate
+        |                            |  Transcribe (Whisper)
+        |                            |  Detect callsign
+        |                            |  Query OpenAI
+        |                            |  Synthesize reply (Piper TTS)
+        |  ◀── FM voice + CTCSS ──   |  Transmit response
+        |                            |
+```
+
+The system operates half-duplex: it pauses receiving while transmitting, then resumes listening.
+
+## Features
+
+- **Full-duplex DSP** — Narrowband FM modulation/demodulation with proper channel filtering, de/pre-emphasis, and CTCSS tone coding
+- **Real-time transcription** — MLX Whisper on Apple Silicon for low-latency speech-to-text
+- **Callsign matching** — Configurable trigger words/phrases with spoken-number normalization
+- **AI dispatch** — OpenAI chat completions with a radio-operator persona
+- **Local TTS** — Piper voice synthesis, routable to radio TX, speakers, or both
+- **Desktop GUI** — PySide6 interface with live spectrum plot, signal meter, transcript log, and configuration controls
+- **Built-In Test (BIT)** — Automated hardware diagnostics for USB throughput and TX FIFO integrity
+- **Headless mode** — Runs without a display for embedded/remote deployments
 
 ## Hardware
 
-- HackRF One (TX + RX)
-- FRS walkie-talkie (Retevis H777 or similar) tuned to matching channel/CTCSS
+| Component | Role |
+|---|---|
+| HackRF One | SDR transceiver (RX + TX) |
+| UHF handheld radio | Operator's radio — any NBFM radio with matching frequency and CTCSS tone |
 
-## Project Structure
+A basic FRS/GMRS walkie-talkie (Retevis H777, Baofeng, etc.) works for bench testing. For legal operation on amateur bands, use a radio that covers your licensed frequencies.
 
-```
-Warden/
-├── main.py                  # Entry point — starts audio thread and RX loop
-├── config.py                # All configuration constants with validation
-├── test_tx.py               # TX test tool (tone, WAV, TTS, modulator)
-├── requirements.txt         # Python dependencies
-├── radio/
-│   ├── sdr.py               # HackRF device management via SoapySDR
-│   ├── controller.py        # Half-duplex RX/TX coordinator
-│   ├── rx.py                # RX loop — squelch, buffering, transcription
-│   ├── tx.py                # TX pipeline — modulate and stream IQ
-│   ├── demod.py             # FM demodulation (IQ → audio)
-│   └── modulator.py         # FM modulation (audio → IQ) with CTCSS
-├── audio/
-│   ├── player.py            # Audio output queue and playback thread
-│   ├── filters.py           # Channel, voice bandpass, de/pre-emphasis filters
-│   └── tts.py               # Piper TTS synthesis and routing
-├── transcription/
-│   └── whisper_engine.py    # MLX Whisper transcription
-└── dispatch/
-    ├── preamble.py          # Callsign matching and dispatch trigger
-    └── openai_client.py     # OpenAI chat API (sync + async)
-```
+## Quick Start
 
-## Setup
+### Prerequisites
+
+- Python 3.11+
+- macOS (Apple Silicon recommended for MLX Whisper) or Linux
+- HackRF One connected via USB
+- An OpenAI API key
+
+### Installation
 
 ```bash
-# Create virtual environment with system site packages (required for SoapySDR)
+cd Warden
+
+# Virtual environment (--system-site-packages required for SoapySDR bindings)
 python3 -m venv .venv --system-site-packages
 source .venv/bin/activate
 
-# Install Python dependencies
+# Python dependencies
 pip install -r requirements.txt
 
-# Install SoapySDR and HackRF support (macOS)
+# System packages — macOS
 brew install soapysdr soapyhackrf hackrf
-```
 
-For Linux (Debian/Ubuntu):
-```bash
-sudo apt install python3-soapysdr soapysdr-module-hackrf hackrf
+# System packages — Debian/Ubuntu
+# sudo apt install python3-soapysdr soapysdr-module-hackrf hackrf
 ```
 
 ### TTS Voice
 
-Download a Piper voice model:
 ```bash
 python3 -m piper.download_voices en_US-amy-medium --download-dir voices
 ```
 
-### Environment Variables
+### Environment
 
 Create a `.env` file in the `Warden/` directory:
+
 ```
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini
@@ -79,107 +85,172 @@ PIPER_VOICE=en_US-amy-medium
 TTS_OUTPUT=transmit
 ```
 
-`TTS_OUTPUT` options: `transmit` | `speakers` | `both`
+`TTS_OUTPUT` controls where synthesized speech goes: `transmit` (over the air), `speakers` (local playback), or `both`.
 
-## Configuration
-
-All settings live in `config.py` with validation at import time.
-
-| Variable | Default | Description |
-|---|---|---|
-| `CENTER_FREQ` | 462.61255e6 | Tune frequency (Hz) |
-| `SAMPLE_RATE` | 2e6 | SDR sample rate |
-| `RX_LNA_GAIN` | 24 | RF gain (0–40 dB, 8 dB steps) |
-| `RX_VGA_GAIN` | 30 | Baseband gain (0–62 dB, 2 dB steps) |
-| `TX_VGA_GAIN` | 30 | TX IF gain (0–47 dB) |
-| `TX_SETTLE_SEC` | 0.3 | Delay after TX stream start before writing IQ |
-| `CHANNEL_BW` | 12500 | Channel filter bandwidth (Hz) |
-| `SQUELCH_THRESHOLD` | 1.5 | IQ power threshold for squelch |
-| `CTCSS_FREQ` | 127.3 | CTCSS tone frequency (Hz) |
-| `CTCSS_LEVEL` | 0.03 | CTCSS tone amplitude |
-| `NBFM_DEVIATION` | 2500 | FM deviation ±Hz |
-| `AUDIO_RATE` | 48000 | Audio sample rate |
-| `WHISPER_MODEL` | mlx-community/whisper-large-v3-turbo | Whisper model |
-| `CALLSIGNS` | ["Alpha X-Ray 3-1", "Bravo 7", "dispatch"] | Preamble triggers |
-
-## Signal Chain
-
-### RX
-
-```
-HackRF RX → IQ (2 MSPS complex64)
-  → Decimate ÷13 → 153.8 kSPS
-  → Channel lowpass (FIR, 128 taps)
-  → Quadrature FM demod: (I·dQ − Q·dI) / (I² + Q²)
-  → Resample → 48 kHz (overlap-save)
-  → Voice bandpass (300–4000 Hz)
-  → De-emphasis (750µs)
-  → Squelch gate
-  → Buffer → on silence: flush to Whisper (resample → 16 kHz)
-  → Callsign match → OpenAI → TTS → TX
-```
-
-### TX
-
-```
-Audio (48 kHz)
-  → Voice bandpass (300–4000 Hz)
-  → Pre-emphasis (750µs)
-  → Scale voice + add CTCSS tone (127.3 Hz)
-  → Resample → intermediate rate (153.8 kHz)
-  → FM modulate (phase accumulation, ±2.5 kHz deviation)
-  → Channel filter (Carson's rule BW)
-  → Interpolate → 2 MSPS
-  → Stream to HackRF TX (paced to real-time)
-```
-
-The entire transmission (lead-in silence + voice + lead-out silence) is modulated as a single continuous block to prevent CTCSS phase discontinuities.
-
-## Running
+### Run
 
 ```bash
-source .venv/bin/activate
+# Headless
 python3 main.py
-```
 
-### Testing TX
-
-```bash
-python3 test_tx.py tone              # 1kHz test tone, 2s
-python3 test_tx.py tone 800 3        # 800Hz, 3s
-python3 test_tx.py wav voice.wav     # Transmit a WAV file
-python3 test_tx.py tts 'Hello world' # Synthesize and transmit
-python3 test_tx.py modulator         # Save IQ to file (no SDR needed)
+# With GUI
+python3 main.py --gui
 ```
 
 ### Verify Hardware
 
 ```bash
-hackrf_info
-SoapySDRUtil --find
+hackrf_info          # Confirm HackRF is detected
+SoapySDRUtil --find  # Confirm SoapySDR sees the device
 ```
 
-## Status
+## Configuration
 
-| Component | Status |
+All parameters live in `config.py` with validation at import time.
+
+### Radio
+
+| Parameter | Default | Description |
+|---|---|---|
+| `CENTER_FREQ` | 462.6125 MHz | Tune frequency |
+| `CHANNEL_BW` | 12,500 Hz | Channel filter bandwidth |
+| `NBFM_DEVIATION` | ±2,500 Hz | FM deviation |
+| `CTCSS_FREQ` | 127.3 Hz | Sub-audible tone (must match operator radio) |
+| `CTCSS_LEVEL` | 0.03 | Tone amplitude relative to full deviation |
+
+### Gains
+
+| Parameter | Default | Range | Description |
+|---|---|---|---|
+| `RX_LNA_GAIN` | 24 dB | 0–40 (8 dB steps) | RF front-end gain |
+| `RX_VGA_GAIN` | 30 dB | 0–62 (2 dB steps) | Baseband gain |
+| `TX_VGA_GAIN` | 0 dB | 0–47 | TX IF gain |
+| `RX_AMP_ENABLE` | Off | — | 14 dB external RF amp |
+| `TX_AMP_ENABLE` | Off | — | 14 dB TX RF amp |
+
+### Timing
+
+| Parameter | Default | Description |
+|---|---|---|
+| `TX_SETTLE_SEC` | 0.3 s | Delay after activating TX stream before writing IQ |
+| `TX_LEAD_IN_SEC` | 0.4 s | CTCSS-only carrier before voice (opens receiver squelch) |
+| `TX_LEAD_OUT_SEC` | 0.5 s | CTCSS-only carrier after voice (clean tail) |
+
+### Dispatch
+
+| Parameter | Default | Description |
+|---|---|---|
+| `CALLSIGNS` | `["Alpha X-Ray 3-1", "Bravo 7", "dispatch", "Jarvis"]` | Phrases that trigger AI dispatch |
+| `WHISPER_MODEL` | `mlx-community/whisper-large-v3-turbo` | Whisper model (auto-downloads) |
+| `ASSISTANT_NAME` | `Jarvis` | How the AI identifies itself on air |
+
+## Architecture
+
+```
+Warden/
+├── main.py                  Entry point — headless or GUI mode
+├── config.py                All settings with validation
+├── test_tx.py               TX test utility
+├── radio/
+│   ├── sdr.py               HackRF device management (SoapySDR)
+│   ├── controller.py        Half-duplex RX/TX coordinator
+│   ├── rx.py                Receive loop — squelch, buffer, transcribe
+│   ├── tx.py                Transmit pipeline — modulate and stream
+│   ├── demod.py             FM demodulation (IQ → audio)
+│   └── modulator.py         FM modulation (audio → IQ) with CTCSS
+├── audio/
+│   ├── player.py            Audio output queue and playback
+│   ├── filters.py           Channel, voice bandpass, de/pre-emphasis filters
+│   └── tts.py               Piper TTS synthesis and routing
+├── transcription/
+│   └── whisper_engine.py    MLX Whisper speech-to-text
+├── dispatch/
+│   ├── preamble.py          Callsign matching and dispatch trigger
+│   └── openai_client.py     OpenAI chat API wrapper
+├── bit/
+│   ├── runner.py            BIT orchestration
+│   ├── usb_health.py        USB throughput test
+│   └── fifo_integrity.py    TX FIFO write-integrity test
+└── gui/
+    ├── app.py               Main window layout
+    ├── bridge.py            Thread-safe Qt signal bridge
+    ├── spectrum.py          Live PSD plot (pyqtgraph)
+    ├── signal_meter.py      RF signal level indicator
+    ├── status_bar.py        RX/TX mode display
+    ├── transcript_panel.py  Radio transcript log
+    ├── log_panel.py         Application log viewer
+    ├── config_panel.py      Live gain/parameter controls
+    └── bit_panel.py         Built-In Test controls and results
+```
+
+## Signal Chain
+
+### Receive
+
+```
+HackRF RX → IQ (2 MSPS complex64)
+  → Decimate ÷13 → 153.8 kSPS
+  → Channel lowpass (FIR, 128 taps)
+  → Quadrature FM demod
+  → Resample → 48 kHz
+  → Voice bandpass (300–4000 Hz)
+  → De-emphasis (750 µs)
+  → Power squelch gate
+  → Buffer → flush on silence → Whisper (16 kHz)
+  → Callsign match → OpenAI → TTS → TX
+```
+
+### Transmit
+
+```
+Audio (48 kHz)
+  → Voice bandpass (300–4000 Hz)
+  → Pre-emphasis (750 µs)
+  → Scale + inject CTCSS tone
+  → Resample → 153.8 kHz intermediate
+  → FM modulate (phase accumulation, ±2.5 kHz)
+  → Resample → 2 MSPS
+  → Stream to HackRF TX (backpressure-paced)
+```
+
+The full transmission (lead-in + voice + lead-out) is modulated as a single continuous block to maintain CTCSS phase continuity.
+
+## Testing TX
+
+```bash
+python3 test_tx.py tone              # 1 kHz test tone, 2 seconds
+python3 test_tx.py tone 800 3        # 800 Hz tone, 3 seconds
+python3 test_tx.py wav voice.wav     # Transmit a WAV file
+python3 test_tx.py tts "Hello world" # Synthesize and transmit
+python3 test_tx.py modulator         # Save modulated IQ to file (no SDR needed)
+```
+
+## Built-In Tests
+
+The BIT system runs hardware diagnostics from the GUI or programmatically:
+
+| Test | What it checks |
 |---|---|
-| HackRF RX/TX | Working |
-| FM demodulation | Working |
-| FM modulation + CTCSS | Working |
-| Half-duplex controller | Working |
-| Audio playback | Working |
-| Squelch | Working |
-| MLX Whisper transcription | Working |
-| Callsign/preamble matching | Working |
-| OpenAI dispatch | Working |
-| Piper TTS | Working |
-| TX voice response | Working |
+| **USB Health** | Sustained write throughput (expects >= 3.5 MB/s) and error rate |
+| **FIFO Integrity** | 2-second continuous stream with zero write failures (stalls = carrier dropouts) |
 
-## Notes
+## Legal Notice
 
-- Whisper model downloads automatically on first run from Hugging Face
-- Virtual environment requires `--system-site-packages` for SoapySDR bindings
-- USB cable quality matters — use a known good data cable
-- Transcription runs on the RX thread when squelch closes
-- Half-duplex: RX pauses during TX and resumes after
-- Config validation runs at import time — bad values fail fast with clear messages
+Transmitting on any frequency requires appropriate authorization. In the US:
+
+- **FRS channels** (462/467 MHz) are limited to type-accepted radios — the HackRF is not type-accepted
+- **Amateur (ham) bands** require an FCC license but allow homebrew transmitters
+- **For bench testing**, keep TX power at minimum and use a dummy load or keep the antenna off
+
+This project is intended for licensed amateur radio operators and educational use. Know and follow your local regulations.
+
+## Dependencies
+
+- **numpy / scipy** — DSP (filtering, resampling, modulation)
+- **SoapySDR** — Hardware abstraction for HackRF
+- **mlx-whisper** — Speech recognition (Apple Silicon optimized)
+- **openai** — LLM API client
+- **piper-tts** — Local neural text-to-speech
+- **PySide6 / pyqtgraph** — Desktop GUI and spectrum visualization
+- **sounddevice** — Audio playback
+- **python-dotenv** — Environment configuration

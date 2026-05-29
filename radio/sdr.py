@@ -9,11 +9,8 @@ import time
 
 import numpy as np
 import SoapySDR
-from config import (
-    SAMPLE_RATE, CENTER_FREQ, BUFF_SIZE,
-    RX_LNA_GAIN, RX_VGA_GAIN, RX_AMP_ENABLE,
-    TX_VGA_GAIN, TX_AMP_ENABLE
-)
+import config
+from config import SAMPLE_RATE, CENTER_FREQ, BUFF_SIZE
 
 log = logging.getLogger("warden.sdr")
 
@@ -55,26 +52,33 @@ class SDRDevice:
         return True
 
     def _set_rx_gains(self):
-        """Configure RX gain stages."""
+        """Configure RX gain stages (reads current values from config so the
+        GUI sliders take effect immediately)."""
+        lna = config.RX_LNA_GAIN
+        vga = config.RX_VGA_GAIN
+        amp_on = bool(config.RX_AMP_ENABLE)
         try:
-            self._device.setGain(SoapySDR.SOAPY_SDR_RX, 0, "LNA", RX_LNA_GAIN)
-            self._device.setGain(SoapySDR.SOAPY_SDR_RX, 0, "VGA", RX_VGA_GAIN)
-            self._device.setGain(SoapySDR.SOAPY_SDR_RX, 0, "AMP", 14.0 if RX_AMP_ENABLE else 0.0)
-            log.info("RX gains: LNA=%ddB VGA=%ddB AMP=%s", RX_LNA_GAIN, RX_VGA_GAIN,
-                     "ON" if RX_AMP_ENABLE else "OFF")
+            self._device.setGain(SoapySDR.SOAPY_SDR_RX, 0, "LNA", lna)
+            self._device.setGain(SoapySDR.SOAPY_SDR_RX, 0, "VGA", vga)
+            self._device.setGain(SoapySDR.SOAPY_SDR_RX, 0, "AMP", 14.0 if amp_on else 0.0)
+            log.info("RX gains: LNA=%ddB VGA=%ddB AMP=%s", lna, vga,
+                     "ON" if amp_on else "OFF")
         except Exception:
-            total = RX_LNA_GAIN + RX_VGA_GAIN + (14 if RX_AMP_ENABLE else 0)
+            total = lna + vga + (14 if amp_on else 0)
             self._device.setGain(SoapySDR.SOAPY_SDR_RX, 0, total)
             log.info("RX gain: %ddB (combined — named stages not supported)", total)
 
     def _set_tx_gains(self):
-        """Configure TX gain stages."""
+        """Configure TX gain stages (reads current values from config so the
+        GUI sliders take effect immediately)."""
+        vga = config.TX_VGA_GAIN
+        amp_on = bool(config.TX_AMP_ENABLE)
         try:
-            self._device.setGain(SoapySDR.SOAPY_SDR_TX, 0, "VGA", TX_VGA_GAIN)
-            self._device.setGain(SoapySDR.SOAPY_SDR_TX, 0, "AMP", 14.0 if TX_AMP_ENABLE else 0.0)
-            log.info("TX gains: VGA=%ddB AMP=%s", TX_VGA_GAIN, "ON" if TX_AMP_ENABLE else "OFF")
+            self._device.setGain(SoapySDR.SOAPY_SDR_TX, 0, "VGA", vga)
+            self._device.setGain(SoapySDR.SOAPY_SDR_TX, 0, "AMP", 14.0 if amp_on else 0.0)
+            log.info("TX gains: VGA=%ddB AMP=%s", vga, "ON" if amp_on else "OFF")
         except Exception:
-            total = TX_VGA_GAIN + (14 if TX_AMP_ENABLE else 0)
+            total = vga + (14 if amp_on else 0)
             self._device.setGain(SoapySDR.SOAPY_SDR_TX, 0, total)
             log.info("TX gain: %ddB (combined — named stages not supported)", total)
 
